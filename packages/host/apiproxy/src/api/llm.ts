@@ -74,6 +74,18 @@ export interface LlmApi {
     }>,
     signal?: AbortSignal,
   ): Promise<RpcResponse<{ models: DiscoveredModelView[] }>>
+
+  /**
+   * Import the OpenCode CLI's stored account credential (`auth.json`) into the
+   * harness credentials document as `OPENCODE_ZEN_API_KEY`, so the
+   * `opencode-zen` route authenticates as the user's logged-in OpenCode
+   * account. The secret never crosses the wire in either direction; the reply
+   * merely reports whether it was already present.
+   */
+  importOpencodeCredential(
+    request: RpcRequest<{}>,
+    signal?: AbortSignal,
+  ): Promise<RpcResponse<{ imported: boolean; alreadyPresent?: boolean }>>
 }
 
 /** Wire view of one model an interrogated endpoint advertises. */

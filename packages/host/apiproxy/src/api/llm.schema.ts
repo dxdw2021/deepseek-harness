@@ -62,3 +62,12 @@ export const llmDiscoverModelsRequestSchema = z.object({
 export const llmDiscoverModelsValueSchema = z.object({
   models: z.array(discoveredModelViewSchema),
 }) satisfies z.ZodType<Wire<ResponseValue<'llm.discoverModels'>>>
+
+/** llm.importOpencodeCredential request payload. */
+export const llmImportOpencodeCredentialRequestSchema = z.object({}) satisfies z.ZodType<Wire<RequestPayload<'llm.importOpencodeCredential'>>>
+
+/** llm.importOpencodeCredential response value. */
+export const llmImportOpencodeCredentialValueSchema = z.object({
+  imported: z.boolean(),
+  alreadyPresent: z.boolean().optional(),
+}) satisfies z.ZodType<Wire<ResponseValue<'llm.importOpencodeCredential'>>>

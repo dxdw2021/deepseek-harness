@@ -38,7 +38,7 @@ import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
 /** Per-adapter-family curated field sets (unknown namespaces get the hint alone). */
-type EditorLayout = 'deepseek' | 'pi-ai' | 'unknown'
+type EditorLayout = 'deepseek' | 'pi-ai' | 'opencode-zen' | 'unknown'
 
 /** The public DeepSeek endpoint shown as the deepseek base-URL placeholder. */
 const DEEPSEEK_PUBLIC_BASE_URL = 'https://api.deepseek.com'
@@ -125,6 +125,7 @@ export function pathOps(
 function layoutOf(ns: string): EditorLayout {
   if (ns === 'llm-deepseek') return 'deepseek'
   if (ns === 'llm-pi-ai') return 'pi-ai'
+  if (ns === 'llm-opencode-zen') return 'opencode-zen'
   return 'unknown'
 }
 
@@ -149,6 +150,8 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const [keyState, setKeyState] = useState<CredentialView | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
+  const [loginBusy, setLoginBusy] = useState(false)
+  const [loginMessage, setLoginMessage] = useState<{ kind: 'ok' | 'error'; text: string } | undefined>(undefined)
   // A settings success advances both retry baselines immediately. Keeping the
   // derived fields in the draft prevents a pushed namespace refresh from
   // turning them into deletions when the following credential write is retried.
@@ -303,6 +306,34 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       setFailure(messageOf(error))
     } finally {
       setBusy(false)
+    }
+  }
+
+  /**
+   * Import the opencode CLI's stored account credential through the wire so the
+   * opencode-zen route authenticates as the user's logged-in OpenCode account.
+   */
+  const importOpencode = async (): Promise<void> => {
+    setLoginBusy(true)
+    setLoginMessage(undefined)
+    try {
+      const response = await props.api.llm.importOpencodeCredential({})
+      if (response.result.ok) {
+        setLoginMessage({
+          kind: 'ok',
+          text: response.result.value.alreadyPresent === true
+            ? t('opencodeLoginPresent')
+            : t('opencodeLoginDone'),
+        })
+      } else {
+        setLoginMessage({ kind: 'error', text: response.result.error.message })
+      }
+    } catch (error) {
+      // A refused or dropped RPC also ends at a readable message, never a
+      // permanently busy button.
+      setLoginMessage({ kind: 'error', text: messageOf(error) })
+    } finally {
+      setLoginBusy(false)
     }
   }
 
@@ -479,9 +510,30 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               : null}
           </div>
         )}
-      {layout === 'unknown'
-        ? <p className={styles['advancedHint']}>{`${t('advancedHint')} (${namespace.ns})`}</p>
-        : curatedFields(layout)}
+      {layout === 'opencode-zen'
+        ? (
+          <div className={styles['field']}>
+            <span className={styles['fieldLabel']}>{t('keyInput')}</span>
+            <button
+              className={styles['secondaryButton']}
+              type="button"
+              disabled={loginBusy || props.readOnly}
+              onClick={() => { void importOpencode() }}
+            >
+              {loginBusy ? t('opencodeLoginBusy') : t('opencodeLogin')}
+            </button>
+            {loginMessage === undefined
+              ? null
+              : (
+                <p className={loginMessage.kind === 'ok' ? styles['advancedHint'] : styles['error']}>
+                  {loginMessage.text}
+                </p>
+              )}
+          </div>
+        )
+        : layout === 'unknown'
+          ? <p className={styles['advancedHint']}>{`${t('advancedHint')} (${namespace.ns})`}</p>
+          : curatedFields(layout)}
       {failure !== undefined ? <p className={styles['error']}>{failure}</p> : null}
       {props.credentialOnly === true || modelFailure === undefined
         ? null
@@ -493,7 +545,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       <EditorFooter
         t={t}
         busy={busy}
-        submitDisabled={disabled || layout === 'unknown'
+        submitDisabled={disabled || layout === 'unknown' || layout === 'opencode-zen'
           || (props.credentialOnly !== true && modelFailure !== undefined)
           || shownKeyFailure !== undefined
           || (props.credentialRequired === true && keyValue.length === 0)}

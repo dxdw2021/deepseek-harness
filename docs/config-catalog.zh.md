@@ -893,6 +893,61 @@ export interface DeepSeekCatalogModel {
 
 来源：[`packages/llm/llm-deepseek/src/index.ts:62`](../packages/llm/llm-deepseek/src/index.ts)
 
+<a id="deepseek-aidsh-llm-opencode-zen"></a>
+
+## `@deepseek-ai/dsh-llm-opencode-zen`
+
+需要：`llm`
+
+```ts config-catalog
+/**
+ * Plugin config, validated by the same-named schemastery schema and doubling
+ * as the `llm-opencode-zen` settings-section shape. Every field is optional in
+ * yml: omitting `apiKeyEnv` uses the keyless anonymous free tier, omitted
+ * capacity fields use the advisory defaults below, and `models` defaults to
+ * the curated free-tier catalog.
+ */
+export interface Config {
+  /**
+   * Optional credential reference (environment-variable name) resolved per
+   * request. Omit it to authenticate anonymously with the `public` bearer; a
+   * reference that resolves to nothing fails the request with
+   * `MISSING_CREDENTIAL` instead of downgrading to anonymous.
+   */
+  apiKeyEnv?: string
+  /** Endpoint base; defaults to {@link PUBLIC_BASE_URL}. */
+  baseURL?: string
+  /** Default per-request output cap (default 32,768); a model's own cap and explicit request values win. */
+  maxTokens?: number
+  /** Positive context capacity used when the selected model has no exact value (default 262,144). */
+  defaultContextWindow?: number
+  /** Advisory free-tier models shown by discovery consumers; defaults to the curated catalog. */
+  models?: ZenCatalogModel[]
+  /** Maximum provider idle time while one stream read is outstanding (default five minutes). */
+  streamIdleTimeoutMs?: number
+  /** Provider-owned model-request retry policy; omission uses normal defaults. */
+  retryPolicy?: RetryPolicyConfig
+}
+
+/** One optional model entry advertised by the direct-fetch adapter. */
+export interface ZenCatalogModel {
+  /** Wire model id accepted by the configured endpoint. */
+  id: string
+  /** Selector label; defaults to {@link id}. */
+  name?: string
+  /** Optional selector detail for deployments with similar model variants. */
+  description?: string
+  /** Known combined request/response context capacity; omitted when deployment metadata is unavailable. */
+  contextWindow?: number
+  /** Per-request output cap for this model; omission falls back to the profile's {@link ZenConnectionOptions.maxTokens}. */
+  maxTokens?: number
+}
+```
+
+依赖：[`RetryPolicyConfig`](../packages/llm/llm/src/index.ts)
+
+来源：[`packages/llm/llm-opencode-zen/src/index.ts:72`](../packages/llm/llm-opencode-zen/src/index.ts)
+
 <a id="deepseek-aidsh-llm-pi-ai"></a>
 
 ## `@deepseek-ai/dsh-llm-pi-ai`

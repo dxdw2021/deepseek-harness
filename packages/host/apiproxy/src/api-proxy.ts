@@ -4,8 +4,10 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, stat } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
@@ -315,6 +317,31 @@ function paginate(
 /** Wrap an ok result echoing the request's rpcId. */
 function ok<T>(request: RpcRequest<unknown>, value: T): RpcResponse<T> {
   return { rpcId: request.rpcId, result: { ok: true, value } }
+}
+
+/** A usable OpenCode account credential from the opencode CLI's auth.json, or undefined. */
+function readOpencodeAccountCredential(): string | undefined {
+  const candidates = [
+    join(homedir(), '.local', 'share', 'opencode', 'auth.json'),
+    ...process.env.APPDATA === undefined ? [] : [join(process.env.APPDATA, 'opencode', 'auth.json')],
+  ]
+  for (const path of candidates) {
+    if (!existsSync(path)) continue
+    let auth: { opencode?: { type?: string; key?: unknown; access?: unknown } }
+    try {
+      auth = JSON.parse(readFileSync(path, 'utf8')) as typeof auth
+    } catch {
+      continue
+    }
+    const raw = auth.opencode?.type === 'api'
+      ? auth.opencode.key
+      : auth.opencode?.type === 'oauth'
+        ? auth.opencode.access
+        : undefined
+    if (typeof raw === 'string' && raw.length >= 8 && /^[\x21-\x7E]+$/.test(raw)) return raw
+    return undefined
+  }
+  return undefined
 }
 
 /**
@@ -3423,6 +3450,31 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             details: { settingsNs, ...baseURL === undefined ? {} : { baseURL } },
           })
         }
+      },
+
+      async importOpencodeCredential(request) {
+        const credentials = ctx.get('credentials')
+        if (credentials === undefined) {
+          return err(request, {
+            code: 'bad-request',
+            details: { issues: [] },
+            message: 'no credential store is mounted; the web composition needs dsh-credentials-local',
+          })
+        }
+        const secret = readOpencodeAccountCredential()
+        if (secret === undefined) {
+          return err(request, {
+            code: 'bad-request',
+            details: { issues: [] },
+            message: 'no usable OpenCode account credential in the opencode CLI auth.json;'
+              + ' run `opencode auth login opencode` first',
+          })
+        }
+        const ref = credentialRef('OPENCODE_ZEN_API_KEY')
+        const current = await credentials.resolve(ref)
+        if (current !== undefined) return ok(request, { imported: false, alreadyPresent: true })
+        await credentials.set(ref, secret)
+        return ok(request, { imported: true, alreadyPresent: false })
       },
     },
 

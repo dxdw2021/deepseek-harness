@@ -8,6 +8,7 @@ import type { RpcResponse, SettingsNamespaceView } from '@deepseek-ai/dsh-api-re
 import { ModelsSection, providerCopy } from '../src/client/ModelsSection.tsx'
 import type { ModelsSectionInjected } from '../src/client/ModelsSection.tsx'
 import { CustomProviderCard } from '../src/client/CustomProviderCard.tsx'
+import { ProviderEditor } from '../src/client/ProviderEditor.tsx'
 import { formatCapacity, parseCapacity } from '../src/client/DeepSeekModelsEditor.tsx'
 import { ModelsSettingsStore, deriveKeyRef, protocolChoices } from '../src/client/store.ts'
 import { en } from '../src/client/locales.ts'
@@ -74,6 +75,7 @@ function scriptedFace(options: {
   discover?: ReturnType<typeof vi.fn>
   mutate?: ReturnType<typeof vi.fn>
   set?: ReturnType<typeof vi.fn>
+  importOpencodeCredential?: ReturnType<typeof vi.fn>
 } = {}) {
   const providers = options.providers ?? {
     openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy.example/v1' },
@@ -96,6 +98,8 @@ function scriptedFace(options: {
       }))),
       models: vi.fn(() => Promise.resolve(ok({ groups: [], failures: [] }))),
       discoverModels: discover,
+      importOpencodeCredential: options.importOpencodeCredential
+        ?? vi.fn(() => Promise.resolve(ok({ imported: true }))),
     },
     settings: {
       describe: vi.fn(() => Promise.resolve(ok({ writable: true, namespaces: [namespace] }))),
@@ -1375,5 +1379,78 @@ describe('API key field', () => {
     await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
     await waitFor(() => { expect(load).toHaveBeenCalledOnce() })
     expect(screen.queryByText(en.customTitle)).toBeNull()
+  })
+})
+
+describe('opencode-zen account login', () => {
+  const zenNamespace = (): SettingsNamespaceView => ({
+    ns: 'llm-opencode-zen',
+    schema: JSON.parse(JSON.stringify(Schema.object({}).toJSON())) as unknown,
+    value: {},
+    base: {},
+    user: {},
+    applies: 'live',
+    secrets: [],
+    revision: 1,
+  })
+
+  function renderZenEditor(importOpencodeCredential: ReturnType<typeof vi.fn>) {
+    const api = {
+      llm: { importOpencodeCredential },
+      credentials: { describe: vi.fn(() => Promise.resolve(ok({ credentials: {} }))) },
+      settings: { describe: vi.fn(() => Promise.resolve(ok({ writable: true, namespaces: [] }))) },
+    }
+    render(
+      <ProviderEditor
+        provider="opencode-zen"
+        displayName="OpenCode Zen"
+        namespace={zenNamespace()}
+        settingsPath={[]}
+        api={api as never}
+        t={t}
+        readOnly={false}
+        onClose={() => { /* no-op */ }}
+      />,
+    )
+  }
+
+  it('imports a stored account credential and reports success', async () => {
+    const importOpencodeCredential = vi.fn(() => Promise.resolve(ok({ imported: true })))
+    renderZenEditor(importOpencodeCredential)
+    fireEvent.click(screen.getByRole('button', { name: en.opencodeLogin }))
+    await waitFor(() => { expect(screen.getByText(en.opencodeLoginDone)).toBeDefined() })
+  })
+
+  it('reports an already-configured credential', async () => {
+    const importOpencodeCredential = vi.fn(() => Promise.resolve(ok({ imported: false, alreadyPresent: true })))
+    renderZenEditor(importOpencodeCredential)
+    fireEvent.click(screen.getByRole('button', { name: en.opencodeLogin }))
+    await waitFor(() => { expect(screen.getByText(en.opencodeLoginPresent)).toBeDefined() })
+  })
+
+  it('shows the wire failure message', async () => {
+    const importOpencodeCredential = vi.fn(() => Promise.resolve(fail('no opencode credential found', 'bad-request')))
+    renderZenEditor(importOpencodeCredential)
+    fireEvent.click(screen.getByRole('button', { name: en.opencodeLogin }))
+    await waitFor(() => { expect(screen.getByText('no opencode credential found')).toBeDefined() })
+  })
+
+  it('shows the in-flight state while the import is pending', async () => {
+    let settle: (value: RpcResponse<{ imported: boolean }>) => void = () => { /* set below */ }
+    const importOpencodeCredential = vi.fn(() => new Promise<RpcResponse<{ imported: boolean }>>((resolve) => {
+      settle = resolve
+    }))
+    renderZenEditor(importOpencodeCredential)
+    fireEvent.click(screen.getByRole('button', { name: en.opencodeLogin }))
+    expect(screen.getByRole('button', { name: en.opencodeLoginBusy })).toBeDefined()
+    settle(ok({ imported: true }))
+    await waitFor(() => { expect(screen.getByText(en.opencodeLoginDone)).toBeDefined() })
+  })
+
+  it('surfaces a transport rejection', async () => {
+    const importOpencodeCredential = vi.fn(() => Promise.reject(new Error('network down')))
+    renderZenEditor(importOpencodeCredential)
+    fireEvent.click(screen.getByRole('button', { name: en.opencodeLogin }))
+    await waitFor(() => { expect(screen.getByText('network down')).toBeDefined() })
   })
 })
