@@ -11,7 +11,8 @@
 import { spawn, spawnSync, ChildProcess } from 'child_process'
 import { join, dirname, delimiter } from 'path'
 import { fileURLToPath } from 'url'
-import { existsSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
+import { app } from 'electron'
 
 /** Process state */
 let dshProcess: ChildProcess | null = null
@@ -40,9 +41,43 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 /**
+ * Extract the bundled dsh runtime archive (resources/dsh-runtime.zip) into the
+ * user-data dir once per shipped archive. Shipping one archive instead of
+ * 32k loose files keeps the installer small and install near-instant; the
+ * one-time extraction is reflected on the boot page. The marker file records
+ * the archive size+mtime so a runtime update re-extracts.
+ * @returns the extracted runtime directory.
+ */
+function ensureRuntimeExtracted(): string {
+  const resourcesPath = process.resourcesPath ?? join(__dirname, '../../..')
+  const archive = join(resourcesPath, 'dsh-runtime.zip')
+  if (!existsSync(archive)) {
+    throw new Error(`dsh runtime archive not found at ${archive}. Reinstall the app.`)
+  }
+  const runtimeDir = join(app.getPath('userData'), 'dsh-runtime')
+  const marker = join(runtimeDir, '.dsh-runtime.marker')
+  const archiveStat = statSync(archive)
+  const expected = `${archiveStat.size}-${archiveStat.mtimeMs}`
+  try {
+    if (readFileSync(marker, 'utf8') === expected && existsSync(join(runtimeDir, 'lib', 'bin.js'))) {
+      return runtimeDir
+    }
+  } catch { /* first run or marker mismatch: extract below */ }
+  console.log('[dsh-process] Extracting dsh runtime...')
+  rmSync(runtimeDir, { recursive: true, force: true })
+  mkdirSync(runtimeDir, { recursive: true })
+  const result = spawnSync('tar', ['-xf', archive, '-C', runtimeDir], { windowsHide: true })
+  if (result.error !== undefined || result.status !== 0) {
+    throw new Error(`failed to extract dsh runtime: ${String(result.error?.message ?? `exit ${result.status}`)}`)
+  }
+  writeFileSync(marker, expected, 'utf8')
+  return runtimeDir
+}
+
+/**
  * Find the dsh executable path.
  * - Development: uses pnpm to run dsh from the repository
- * - Production: uses the bundled dsh binary
+ * - Production: the bundled dsh runtime, extracted from the shipped archive
  */
 function resolveDshPath(): string {
   const isDev = process.env.NODE_ENV === 'development'
@@ -65,18 +100,18 @@ function resolveDshPath(): string {
     return fallback
   }
 
-  // Production: use bundled dsh
+  // Production: the shipped runtime archive, extracted into the user-data dir.
   const resourcesPath = process.resourcesPath ?? join(__dirname, '../../..')
-  const bundledPath = join(resourcesPath, 'dsh', exeName)
-
-  if (existsSync(bundledPath)) {
-    console.log(`[dsh-process] Using bundled dsh: ${bundledPath}`)
-    return bundledPath
+  const archive = join(resourcesPath, 'dsh-runtime.zip')
+  if (existsSync(archive)) {
+    const runtimeDir = ensureRuntimeExtracted()
+    const extractedEntry = join(runtimeDir, 'lib', 'bin.js')
+    console.log(`[dsh-process] Using extracted dsh node entry: ${extractedEntry}`)
+    return `node:${extractedEntry}`
   }
 
-  // The bundled dsh is a Node deployment tree (bundle-dsh.mjs), not a native
-  // binary: run its compiled entry under the current executable when the
-  // binary is absent, exactly like the development branch.
+  // Legacy loose tree fallback for installations built before the archive
+  // layout: run the bundled dsh tree under the current executable.
   const bundledBinJs = join(resourcesPath, 'dsh', 'lib', 'bin.js')
   if (existsSync(bundledBinJs)) {
     console.log(`[dsh-process] Using bundled dsh node entry: ${bundledBinJs}`)
@@ -104,19 +139,31 @@ function parsePortFromOutput(output: string): number | null {
 /**
  * Resolve the node command that runs the dsh web child.
  *
- * The dsh runtime is a plain Node program; the desktop only bundles a Node via
- * Electron-as-node. Prefer a real Node on PATH when it meets the runtime's
- * floor (>= 22.6, which the code-runtime worker needs for `node:module`
- * `stripTypeScriptTypes`): koffi's FFI (directory picker, Windows-ACL sandbox,
- * fs/session Win32 helpers) is unreliable under Electron-as-node, and the
- * profile-init junction heal is far faster under real Node. `DSH_RUNTIME_NODE`
- * pins the command explicitly and always wins; Electron-as-node is the
- * fallback for hosts that ship no Node.
+ * The dsh runtime is a plain Node program; the desktop bundles a Node with the
+ * installer (resources/node) so a production install never depends on a system
+ * Node or on the Electron-as-node fallback: koffi's FFI (directory picker,
+ * Windows-ACL sandbox, fs/session Win32 helpers) is unreliable under
+ * Electron-as-node, and its lstat/junction handling breaks profile boot.
+ * Precedence: `DSH_RUNTIME_NODE` pins the command and always wins; then the
+ * bundled Node; then a real Node on PATH that meets the runtime's floor
+ * (>= 22.6, which the code-runtime worker needs for `node:module`
+ * `stripTypeScriptTypes`); Electron-as-node remains the fallback for unusual
+ * layouts that ship neither.
  */
 function resolveNodeCommand(): string {
   const pinned = process.env.DSH_RUNTIME_NODE
   if (pinned !== undefined && pinned !== '') return pinned
   const exe = process.platform === 'win32' ? 'node.exe' : 'node'
+  if (app.isPackaged) {
+    const bundled = join(process.resourcesPath, 'node', exe)
+    if (existsSync(bundled)) {
+      const version = spawnSync(bundled, ['--version'], { windowsHide: true }).stdout?.toString() ?? ''
+      if (/^v(\d+)\./.exec(version) !== null) {
+        console.log(`[dsh-process] Using bundled node ${version.trim()}`)
+        return bundled
+      }
+    }
+  }
   for (const dir of (process.env.PATH ?? '').split(delimiter)) {
     if (dir === '') continue
     const candidate = join(dir, exe)

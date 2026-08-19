@@ -10,13 +10,18 @@
  */
 
 import { app, BrowserWindow } from 'electron'
-import { startDshWeb, stopDshWeb } from './process.js'
+import { startDshWeb, stopDshWeb, setProcessState } from './process.js'
 import { createMainWindow } from './window.js'
 import { BOOT_PAGE_URL, setBootStatus } from './splash.js'
 import { setupTray, destroyTray } from './tray.js'
 import { setupMenu } from './menu.js'
 import { setupUpdater } from './updater.js'
 import { setupIpcHandlers } from './ipc.js'
+import { installFileLogging, getMainLogPath } from './logger.js'
+
+// A packaged GUI app on Windows shows no console output; mirror every log
+// line to <userData>/logs/main.log before anything can write to console.
+installFileLogging()
 
 // Renderer crashes under GPU contention are an environmental fact (drivers,
 // virtual displays, AV scanners). Software rendering decouples the shell from
@@ -139,6 +144,10 @@ async function main(): Promise<void> {
 
   console.log('[dsh-desktop] Starting DeepSeek Harness Desktop...')
 
+  // Wire the quit flag that process.ts consults on dsh exit, so shutting the
+  // app down does not look like an unexpected dsh crash and trigger a restart.
+  setProcessState(state)
+
   try {
     // 1. Show the main window on the boot page immediately, so the slow
     //    one-time first-launch preparation (dsh web profile init, the Windows
@@ -177,10 +186,15 @@ async function main(): Promise<void> {
   } catch (error) {
     console.error('[dsh-desktop] Failed to start:', error)
     const win = currentWindow
+    // Show the failure on the window instead of quitting: a silent exit gives
+    // the user (and us) nothing to debug, while the boot page can surface the
+    // exact error and the log file path.
     if (win !== null && !win.isDestroyed() && win.webContents.getURL().startsWith('data:')) {
-      setBootStatus(win, `启动失败：${String(error)}`)
+      setBootStatus(
+        win,
+        `启动失败：${String(error)}\n\n日志文件：${getMainLogPath()}\n\n可从托盘菜单退出应用。`,
+      )
     }
-    setTimeout(() => app.quit(), 3000)
   }
 }
 

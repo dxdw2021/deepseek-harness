@@ -5,6 +5,7 @@
 node_modules/
 dist/
 resources/dsh/
+resources/node/
 %LOCALAPPDATA%/
 .tmp/
 *.log

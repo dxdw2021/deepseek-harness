@@ -28,6 +28,8 @@ Native desktop wrapper for the DeepSeek Harness Web GUI. Provides window managem
 - **Native Menu**: File, Edit, View, Window, Help menus with keyboard shortcuts
 - **Auto Update**: Check for updates, download, and install automatically
 - **Cross-Platform**: Windows, macOS, Linux support
+- **Bundled Node**: The installer ships a Node runtime (`resources/node`) so the packaged app runs `dsh web` under a known-good Node even when the host has none on PATH; the Electron-as-node fallback (whose FFI and junction handling are unreliable) is never used in production builds.
+- **File Logs**: All main-process output is mirrored to `<userData>/logs/main.log` (`userData` is `%APPDATA%\@deepseek-ai\dsh-desktop` on Windows), so a first-launch failure can be diagnosed on the target machine instead of vanishing with the window.
 
 ## Prerequisites
 
@@ -79,6 +81,10 @@ pnpm run build:win    # Windows
 pnpm run build:mac    # macOS
 pnpm run build:linux  # Linux
 ```
+
+`build:dsh` fetches the bundled Node runtime via `scripts/ensure-node.mjs`
+(`DSH_NODE_VERSION` and `DSH_NODE_MIRROR` override the pinned version and
+download host) before `electron-builder` packages the installer.
 
 Output will be in `dist/installers/`.
 
@@ -132,6 +138,13 @@ packages/desktop/
 ## Troubleshooting
 
 ### dsh web fails to start
+- Check the main-process log: `%APPDATA%\@deepseek-ai\dsh-desktop\logs\main.log`
+  (macOS/Linux: `~/Library/Application Support/@deepseek-ai/dsh-desktop` /
+  `~/.config/@deepseek-ai/dsh-desktop`) — it captures both the shell's own
+  output and the `dsh web` child's stdout/stderr. The boot page now stays open
+  and shows the failure plus the log path instead of exiting silently.
+- A stale profile row at `$DSH_HOME/profiles/node_modules/<pkg>` (a real
+  directory where dsh maintains a link) is healed automatically on boot.
 - Ensure the harness is built: `pnpm run build` from repository root
 - Check that dsh is in PATH or bundled correctly
 

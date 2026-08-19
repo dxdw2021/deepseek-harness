@@ -19,21 +19,32 @@ directories:
   output: dist/installers
   buildResources: resources
 
-# Files to include in the build
+# Files to include in the build (app.asar). Only the compiled main process and
+# app resources go in: the dsh runtime ships as one extraResource archive and
+# extracts to the user-data dir on first run. `dist/installers/**` (the build
+# output) must never be packed — globbing dist/**/* would embed the whole
+# win-unpacked tree into app.asar.
 files:
-  - dist/**/*
+  - dist/main/**/*
   - resources/**/*
+  - '!resources/dsh/**'
+  - '!resources/dsh-runtime.zip'
+  - '!resources/node/**'
   - node_modules/electron-updater/**/*
   - node_modules/electron-store/**/*
   - package.json
 
 # Extra resources to include (bundled with the app)
 extraResources:
-  # Include dsh binary (bundled via pnpm run bundle:dsh)
-  - from: resources/dsh
-    to: dsh
-    filter:
-      - "**/*"
+  # dsh runtime as one archive (created by bundle:dsh); the app extracts it
+  # into the user-data dir on first run and boots from there.
+  - from: resources/dsh-runtime.zip
+    to: dsh-runtime.zip
+  # Bundled Node runtime (created by ensure-node); the app runs dsh web under
+  # it so no system Node is required and the Electron-as-node fallback (whose
+  # koffi/junction handling is unreliable) is never used in production.
+  - from: resources/node
+    to: node
   # Include app icons
   - from: resources/icon.png
     to: icon.png

@@ -19,10 +19,11 @@
     "build:electron:win": "tsc && electron-builder --win",
     "build:electron:mac": "tsc && electron-builder --mac",
     "build:electron:linux": "tsc && electron-builder --linux",
-    "build:dsh": "pnpm --filter @deepseek-ai/dsh-cli build && pnpm run bundle:dsh",
+    "build:dsh": "pnpm --filter @deepseek-ai/dsh-cli build && pnpm run bundle:dsh && pnpm run ensure-node",
     "bundle:dsh": "node scripts/bundle-dsh.mjs",
+    "ensure-node": "node scripts/ensure-node.mjs",
     "preview": "electron dist/main/index.js",
-    "clean": "rimraf dist dist/installers resources/dsh"
+    "clean": "rimraf dist dist/installers resources/dsh resources/node"
   },
   "dependencies": {
     "electron-store": "^8.2.0",
