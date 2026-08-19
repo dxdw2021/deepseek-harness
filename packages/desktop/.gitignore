@@ -1,0 +1,10 @@
+# DeepSeek Harness Desktop - build artifacts and local caches
+# The repo has no package-tier ignore for this standalone package yet; keep
+# deliverables (source) in, and ~GB of intermediates out.
+
+node_modules/
+dist/
+resources/dsh/
+%LOCALAPPDATA%/
+.tmp/
+*.log

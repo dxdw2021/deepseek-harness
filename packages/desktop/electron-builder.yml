@@ -1,0 +1,171 @@
+# DeepSeek Harness Desktop - Electron Builder Configuration
+# Builds the desktop wrapper as native installers for Windows, macOS, and Linux
+
+appId: com.deepseek.harness
+productName: DeepSeek Harness
+copyright: Copyright © 2024 DeepSeek AI
+
+# 固定 electron 版本 (pnpm strict hoisting 下 electron-builder 无法自动检测)
+# 41 打包 Node 24，满足 dsh 运行时的 Node >= 22 要求 (stripTypeScriptTypes 等)。
+electronVersion: 41.10.6
+
+# Electron 下载配置
+electronDownload:
+  mirror: "https://npmmirror.com/mirrors/electron/"
+  cache: "%LOCALAPPDATA%\\electron\\Cache"
+
+# Output directory
+directories:
+  output: dist/installers
+  buildResources: resources
+
+# Files to include in the build
+files:
+  - dist/**/*
+  - resources/**/*
+  - node_modules/electron-updater/**/*
+  - node_modules/electron-store/**/*
+  - package.json
+
+# Extra resources to include (bundled with the app)
+extraResources:
+  # Include dsh binary (bundled via pnpm run bundle:dsh)
+  - from: resources/dsh
+    to: dsh
+    filter:
+      - "**/*"
+  # Include app icons
+  - from: resources/icon.png
+    to: icon.png
+  - from: resources/icon.ico
+    to: icon.ico
+  - from: resources/icon.icns
+    to: icon.icns
+  - from: resources/tray-icon.png
+    to: tray-icon.png
+  - from: resources/tray-icon.ico
+    to: tray-icon.ico
+  - from: resources/tray-icon-dark.ico
+    to: tray-icon-dark.ico
+
+# Windows configuration
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: dir
+      arch:
+        - x64
+  icon: resources/icon.ico
+  artifactName: "DeepSeek-Harness-${version}-win-${arch}.${ext}"
+  # Sign with code signing certificate (optional)
+  # certificateFile: env.WIN_CERTIFICATE_FILE
+  # certificatePassword: env.WIN_CERTIFICATE_PASSWORD
+
+# macOS configuration
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+        - universal
+  icon: resources/icon.icns
+  artifactName: "DeepSeek-Harness-${version}-mac-${arch}.dmg"
+  # Code signing (optional)
+  # identity: env.APPLE_IDENTITY
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  # Notarization (optional)
+  # notarize:
+  #   teamId: env.APPLE_TEAM_ID
+
+# Linux configuration
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
+    - target: deb
+      arch:
+        - x64
+        - arm64
+    - target: rpm
+      arch:
+        - x64
+  icon: resources/
+  executableName: deepseek-harness
+  artifactName: "DeepSeek-Harness-${version}-linux-${arch}.${ext}"
+  category: Development
+  desktop:
+    Name: DeepSeek Harness
+    Comment: AI Agent Development Framework
+    Keywords: ai;agent;development;deepseek;
+    StartupWMClass: deepseek-harness
+
+# NSIS installer configuration (Windows)
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DeepSeek Harness
+  uninstallDisplayName: DeepSeek Harness
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
+
+# DMG configuration (macOS)
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# AppImage configuration (Linux)
+appImage:
+  artifactName: "DeepSeek-Harness-${version}-linux-${arch}.AppImage"
+
+# Deb configuration (Linux)
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+
+# RPM configuration (Linux)
+rpm:
+  depends:
+    - gtk3
+    - libnotify
+    - nss
+    - libXScrnSaver
+    - libXtst
+    - xdg-utils
+    - at-spi2-core
+    - libuuid
+    - libsecret
+
+# After pack hook (optional - for code signing)
+# afterPack: ./scripts/after-pack.js
+
+# Publish configuration (for auto-update via GitHub Releases)
+publish:
+  provider: github
+  owner: deepseek-ai
+  repo: deepseek-harness
+  releaseType: release
