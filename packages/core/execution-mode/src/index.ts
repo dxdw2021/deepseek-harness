@@ -1,7 +1,7 @@
 /**
  * Execution mode capability for DeepSeek Harness agents.
  * Provides three execution modes: Light, Balanced, and Delivery.
- * 
+ *
  * @module @deepseek-ai/dsh-execution-mode
  */
 
@@ -59,19 +59,19 @@ export interface DeliveryModeConfig {
 /** Execution mode service definition */
 export class ExecutionModeService extends Service {
   static inject = ['settings']
-  
+
   private currentMode: ExecutionMode = 'balanced'
   private history: ExecutionMode[] = []
-  
+
   constructor(ctx: Context) {
     super(ctx, 'executionMode')
   }
-  
+
   /** Get current execution mode */
   getCurrentMode(): ExecutionMode {
     return this.currentMode
   }
-  
+
   /** Set execution mode */
   setMode(mode: ExecutionMode): void {
     const previousMode = this.currentMode
@@ -79,7 +79,7 @@ export class ExecutionModeService extends Service {
     this.currentMode = mode
     this.ctx.emit('execution-mode/changed', mode, previousMode)
   }
-  
+
   /** Get mode configuration */
   getModeConfig(mode: ExecutionMode): LightModeConfig | BalancedModeConfig | DeliveryModeConfig {
     const scope = this.ctx.settings.register(
@@ -141,12 +141,12 @@ export class ExecutionModeService extends Service {
             },
           },
         },
-      }
+      },
     )
-    
+
     return scope.get().modes[mode]
   }
-  
+
   /** Check if mode switching is enabled */
   isModeSwitchingEnabled(): boolean {
     const scope = this.ctx.settings.register(
@@ -208,17 +208,17 @@ export class ExecutionModeService extends Service {
             },
           },
         },
-      }
+      },
     )
-    
+
     return scope.get().enableModeSwitching
   }
-  
+
   /** Get mode history */
   getHistory(): ExecutionMode[] {
     return [...this.history]
   }
-  
+
   /** Reset to default mode */
   resetToDefault(): void {
     this.setMode('balanced')
@@ -249,12 +249,12 @@ export function createExecutionModePlugin(config: Config = {}): {
     apply(ctx) {
       const service = new ExecutionModeService(ctx)
       ctx.executionMode = service
-      
+
       // Set default mode if provided
       if (config.defaultMode) {
         service.setMode(config.defaultMode)
       }
-      
+
       // Register mode switching command if enabled
       if (config.enableModeSwitching !== false) {
         ctx.effect(() => {

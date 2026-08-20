@@ -13,7 +13,7 @@
  */
 
 /* jscpd:ignore-start */
-import { CallId, EMPTY_RESPONSE_CODE, LlmError } from '@deepseek-ai/dsh-llm'
+import { CallId, EMPTY_RESPONSE_CODE, LlmError, STREAM_CLOSED_CODE } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { DONE } from './sse.ts'
 import type { WireChunk, WireUsage } from './types.ts'
@@ -187,6 +187,6 @@ export async function* translate(payloads: AsyncIterable<string>): AsyncGenerato
 
   // parseSse guarantees the [DONE] sentinel (or throws); reaching here means
   // the payload source violated that contract.
-  throw new LlmError('SSE payload stream ended without [DONE]', 'STREAM_CLOSED')
+  throw new LlmError('SSE payload stream ended without [DONE]', STREAM_CLOSED_CODE)
 }
 /* jscpd:ignore-end */

@@ -1,7 +1,7 @@
 /**
  * Tool registry and management system for DeepSeek Harness.
  * Provides a centralized registry for managing tools, their schemas, and execution.
- * 
+ *
  * @module @deepseek-ai/dsh-tool-registry
  */
 
@@ -10,7 +10,7 @@ import z from '@deepseek-ai/schemastery'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 
 /** Tool category types */
-export type ToolCategory = 
+export type ToolCategory =
   | 'file'          // File operations
   | 'shell'         // Shell operations
   | 'task'          // Task management
@@ -114,10 +114,10 @@ export interface ToolRegistryConfig {
 /** Tool registry service definition */
 export class ToolRegistryService extends Service {
   static inject = ['settings']
-  
+
   /** Tool definitions registry */
   private tools: Map<string, ToolDefinition> = new Map()
-  
+
   /** Tool execution metrics */
   private metrics: Map<string, {
     totalExecutions: number
@@ -126,14 +126,14 @@ export class ToolRegistryService extends Service {
     averageExecutionTime: number
     lastExecutionTime?: Date
   }> = new Map()
-  
+
   /** Tool cache */
   private cache: Map<string, {
     result: unknown
     timestamp: Date
     ttl: number
   }> = new Map()
-  
+
   /** Configuration */
   private config: ToolRegistryConfig = {
     enabled: true,
@@ -144,25 +144,25 @@ export class ToolRegistryService extends Service {
     enableMetrics: true,
     enableLogging: true,
   }
-  
+
   constructor(ctx: Context) {
     super(ctx, 'toolRegistry')
   }
-  
+
   /** Register a tool */
   register(tool: ToolDefinition): () => void {
     if (!this.config.enabled) {
       throw new Error('Tool registry is disabled')
     }
-    
+
     // Validate tool name
     if (this.tools.has(tool.name)) {
       throw new Error(`Tool "${tool.name}" is already registered`)
     }
-    
+
     // Register tool
     this.tools.set(tool.name, tool)
-    
+
     // Initialize metrics
     this.metrics.set(tool.name, {
       totalExecutions: 0,
@@ -170,10 +170,10 @@ export class ToolRegistryService extends Service {
       failedExecutions: 0,
       averageExecutionTime: 0,
     })
-    
+
     // Emit registration event
     this.ctx.emit('tool-registry/tool-registered', tool.name, tool.category)
-    
+
     // Return disposer
     return () => {
       this.tools.delete(tool.name)
@@ -181,47 +181,47 @@ export class ToolRegistryService extends Service {
       this.ctx.emit('tool-registry/tool-unregistered', tool.name)
     }
   }
-  
+
   /** Get a tool by name */
   get(name: string): ToolDefinition | undefined {
     return this.tools.get(name)
   }
-  
+
   /** Get all tools */
   getAll(): ToolDefinition[] {
     return Array.from(this.tools.values())
   }
-  
+
   /** Get tools by category */
   getByCategory(category: ToolCategory): ToolDefinition[] {
     return Array.from(this.tools.values()).filter(tool => tool.category === category)
   }
-  
+
   /** Get tools by permission */
   getByPermission(permission: ToolPermission): ToolDefinition[] {
-    return Array.from(this.tools.values()).filter(tool => 
-      tool.permissions.includes(permission)
+    return Array.from(this.tools.values()).filter(tool =>
+      tool.permissions.includes(permission),
     )
   }
-  
+
   /** Get read-only tools */
   getReadOnlyTools(): ToolDefinition[] {
     return Array.from(this.tools.values()).filter(tool => tool.readOnly)
   }
-  
+
   /** Get writable tools */
   getWritableTools(): ToolDefinition[] {
     return Array.from(this.tools.values()).filter(tool => !tool.readOnly)
   }
-  
+
   /** Execute a tool */
   async execute(
     name: string,
     args: unknown,
-    context: ToolExecutionContext
+    context: ToolExecutionContext,
   ): Promise<ToolExecutionResult> {
     const startTime = Date.now()
-    
+
     // Get tool definition
     const tool = this.tools.get(name)
     if (!tool) {
@@ -231,7 +231,7 @@ export class ToolRegistryService extends Service {
         executionTime: Date.now() - startTime,
       }
     }
-    
+
     // Check permissions
     if (!this.hasRequiredPermissions(tool, context)) {
       return {
@@ -240,7 +240,7 @@ export class ToolRegistryService extends Service {
         executionTime: Date.now() - startTime,
       }
     }
-    
+
     // Check cache
     const cacheKey = this.getCacheKey(name, args)
     if (this.config.enableCaching && tool.readOnly) {
@@ -254,17 +254,17 @@ export class ToolRegistryService extends Service {
         }
       }
     }
-    
+
     // Execute tool
     try {
       const result = await Promise.race([
         tool.execute(args, context),
         this.createTimeoutPromise(tool.timeoutMs || this.config.defaultTimeoutMs, context.signal),
       ])
-      
+
       // Update metrics
       this.updateMetrics(name, true, Date.now() - startTime)
-      
+
       // Cache result
       if (this.config.enableCaching && tool.readOnly) {
         this.cache.set(cacheKey, {
@@ -273,10 +273,10 @@ export class ToolRegistryService extends Service {
           ttl: this.config.cacheTtlMs,
         })
       }
-      
+
       // Emit execution event
       this.ctx.emit('tool-registry/tool-executed', name, true, Date.now() - startTime)
-      
+
       return {
         success: true,
         value: result,
@@ -285,10 +285,10 @@ export class ToolRegistryService extends Service {
     } catch (error) {
       // Update metrics
       this.updateMetrics(name, false, Date.now() - startTime)
-      
+
       // Emit execution event
       this.ctx.emit('tool-registry/tool-executed', name, false, Date.now() - startTime)
-      
+
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
@@ -296,12 +296,12 @@ export class ToolRegistryService extends Service {
       }
     }
   }
-  
+
   /** Get tool metrics */
   getMetrics(name: string): Record<string, unknown> | undefined {
     return this.metrics.get(name)
   }
-  
+
   /** Get all metrics */
   getAllMetrics(): Record<string, Record<string, unknown>> {
     const result: Record<string, Record<string, unknown>> = {}
@@ -310,73 +310,73 @@ export class ToolRegistryService extends Service {
     }
     return result
   }
-  
+
   /** Clear cache */
   clearCache(): void {
     this.cache.clear()
   }
-  
+
   /** Get cache size */
   getCacheSize(): number {
     return this.cache.size
   }
-  
+
   /** Update configuration */
   updateConfig(config: Partial<ToolRegistryConfig>): void {
     this.config = { ...this.config, ...config }
     this.ctx.emit('tool-registry/config-changed', this.config)
   }
-  
+
   /** Get configuration */
   getConfig(): ToolRegistryConfig {
     return { ...this.config }
   }
-  
+
   /** Check if tool has required permissions */
   private hasRequiredPermissions(_tool: ToolDefinition, _context: ToolExecutionContext): boolean {
     // In a real implementation, this would check against user permissions
     // For now, return true
     return true
   }
-  
+
   /** Get cache key for tool execution */
   private getCacheKey(name: string, args: unknown): string {
     return `${name}:${JSON.stringify(args)}`
   }
-  
+
   /** Create timeout promise */
   private createTimeoutPromise(timeoutMs: number, signal: AbortSignal): Promise<never> {
     return new Promise((_, reject) => {
       const timeout = setTimeout(() => {
         reject(new Error(`Tool execution timed out after ${timeoutMs}ms`))
       }, timeoutMs)
-      
+
       signal.addEventListener('abort', () => {
         clearTimeout(timeout)
         reject(new Error('Tool execution cancelled'))
       })
     })
   }
-  
+
   /** Update tool metrics */
   private updateMetrics(name: string, success: boolean, executionTime: number): void {
     if (!this.config.enableMetrics) return
-    
+
     const metrics = this.metrics.get(name)
     if (!metrics) return
-    
+
     metrics.totalExecutions++
     if (success) {
       metrics.successfulExecutions++
     } else {
       metrics.failedExecutions++
     }
-    
+
     // Update average execution time
-    metrics.averageExecutionTime = 
-      (metrics.averageExecutionTime * (metrics.totalExecutions - 1) + executionTime) / 
+    metrics.averageExecutionTime =
+      (metrics.averageExecutionTime * (metrics.totalExecutions - 1) + executionTime) /
       metrics.totalExecutions
-    
+
     metrics.lastExecutionTime = new Date()
   }
 }
@@ -415,12 +415,12 @@ export function createToolRegistryPlugin(config: Config = {}): {
     apply(ctx) {
       const service = new ToolRegistryService(ctx)
       ctx.toolRegistry = service
-      
+
       // Apply configuration
       if (Object.keys(config).length > 0) {
         service.updateConfig(config)
       }
-      
+
       // Register settings section
       ctx.effect(() => {
         const scope = ctx.settings.register(
@@ -444,14 +444,14 @@ export function createToolRegistryPlugin(config: Config = {}): {
               enableMetrics: true,
               enableLogging: true,
             },
-          }
+          },
         )
-        
+
         // Watch for settings changes
         scope.watch((next) => {
           service.updateConfig(next)
         })
-        
+
         return () => {
           // Cleanup
         }
@@ -477,14 +477,14 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'tool-registry/tool-registered'(name: string, category: ToolCategory): void
-    
+
     /**
      * Tool unregistered.
      * @param name - tool name.
      * @mode emit
      */
     'tool-registry/tool-unregistered'(name: string): void
-    
+
     /**
      * Tool executed.
      * @param name - tool name.
@@ -493,7 +493,7 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'tool-registry/tool-executed'(name: string, success: boolean, executionTime: number): void
-    
+
     /**
      * Tool registry configuration changed.
      * @param config - new configuration.

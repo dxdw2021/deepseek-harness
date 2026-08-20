@@ -1,7 +1,7 @@
 /**
  * Dual model collaboration capability for DeepSeek Harness agents.
  * Provides Executor + Planner separation for improved task execution.
- * 
+ *
  * @module @deepseek-ai/dsh-dual-model
  */
 
@@ -26,7 +26,7 @@ export interface ModelConfig {
 }
 
 /** Collaboration strategies */
-export type CollaborationStrategy = 
+export type CollaborationStrategy =
   | 'sequential'    // Planner first, then Executor
   | 'parallel'      // Both models work simultaneously
   | 'iterative'     // Alternating between Planner and Executor
@@ -137,7 +137,7 @@ export interface ExecutionMetrics {
 /** Dual model service definition */
 export class DualModelService extends Service {
   static inject = ['settings', 'executionMode']
-  
+
   private config: DualModelConfig = {
     enabled: false,
     executor: {
@@ -150,60 +150,60 @@ export class DualModelService extends Service {
     },
     strategy: 'sequential',
   }
-  
+
   constructor(ctx: Context) {
     super(ctx, 'dualModel')
   }
-  
+
   /** Check if dual model is enabled */
   isEnabled(): boolean {
     return this.config.enabled
   }
-  
+
   /** Enable or disable dual model */
   setEnabled(enabled: boolean): void {
     this.config.enabled = enabled
     this.ctx.emit('dual-model/enabled-changed', enabled)
   }
-  
+
   /** Get current configuration */
   getConfig(): DualModelConfig {
     return { ...this.config }
   }
-  
+
   /** Update configuration */
   updateConfig(config: Partial<DualModelConfig>): void {
     this.config = { ...this.config, ...config }
     this.ctx.emit('dual-model/config-changed', this.config)
   }
-  
+
   /** Get executor model */
   getExecutorModel(): ModelConfig {
     return { ...this.config.executor }
   }
-  
+
   /** Get planner model */
   getPlannerModel(): ModelConfig {
     return { ...this.config.planner }
   }
-  
+
   /** Set collaboration strategy */
   setStrategy(strategy: CollaborationStrategy): void {
     this.config.strategy = strategy
     this.ctx.emit('dual-model/strategy-changed', strategy)
   }
-  
+
   /** Get current strategy */
   getStrategy(): CollaborationStrategy {
     return this.config.strategy
   }
-  
+
   /** Plan a task using the planner model */
   async planTask(task: string): Promise<TaskPlan> {
     if (!this.config.enabled) {
       throw new Error('Dual model collaboration is disabled')
     }
-    
+
     // In a real implementation, this would call the planner model
     // For now, return a mock plan
     return {
@@ -240,24 +240,24 @@ export class DualModelService extends Service {
       },
     }
   }
-  
+
   /** Execute a plan using the executor model */
   async executePlan(plan: TaskPlan): Promise<ExecutionResult> {
     if (!this.config.enabled) {
       throw new Error('Dual model collaboration is disabled')
     }
-    
+
     const startTime = Date.now()
     const stepResults: StepResult[] = []
-    
+
     // Execute steps based on strategy
     for (const step of plan.steps) {
       // Check dependencies
       const dependencies = plan.dependencies[step.id] || []
-      const allDependenciesMet = dependencies.every(depId => 
-        stepResults.some(result => result.stepId === depId && result.success)
+      const allDependenciesMet = dependencies.every(depId =>
+        stepResults.some(result => result.stepId === depId && result.success),
       )
-      
+
       if (!allDependenciesMet) {
         stepResults.push({
           stepId: step.id,
@@ -268,7 +268,7 @@ export class DualModelService extends Service {
         })
         continue
       }
-      
+
       // Execute step (mock implementation)
       const stepResult: StepResult = {
         stepId: step.id,
@@ -281,13 +281,13 @@ export class DualModelService extends Service {
           success: true,
         })),
       }
-      
+
       stepResults.push(stepResult)
     }
-    
+
     const totalTime = Date.now() - startTime
     const allSuccess = stepResults.every(result => result.success)
-    
+
     return {
       planId: plan.id,
       stepResults,
@@ -308,7 +308,7 @@ export class DualModelService extends Service {
       },
     }
   }
-  
+
   /** Get model for current execution mode */
   getModelForMode(mode: ExecutionMode): ModelConfig {
     switch (mode) {
@@ -352,30 +352,30 @@ export function createDualModelPlugin(config: Config = {}): {
     apply(ctx) {
       const service = new DualModelService(ctx)
       ctx.dualModel = service
-      
+
       // Apply configuration
       if (config.enabled !== undefined) {
         service.setEnabled(config.enabled)
       }
-      
+
       if (config.executor) {
         const currentConfig = service.getConfig()
         service.updateConfig({
           executor: { ...currentConfig.executor, ...config.executor },
         })
       }
-      
+
       if (config.planner) {
         const currentConfig = service.getConfig()
         service.updateConfig({
           planner: { ...currentConfig.planner, ...config.planner },
         })
       }
-      
+
       if (config.strategy) {
         service.setStrategy(config.strategy)
       }
-      
+
       // Register settings section
       ctx.effect(() => {
         const scope = ctx.settings.register(
@@ -418,14 +418,14 @@ export function createDualModelPlugin(config: Config = {}): {
               },
               strategy: 'sequential',
             },
-          }
+          },
         )
-        
+
         // Watch for settings changes
         scope.watch((next) => {
           service.updateConfig(next)
         })
-        
+
         return () => {
           // Cleanup
         }
@@ -450,14 +450,14 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'dual-model/enabled-changed'(enabled: boolean): void
-    
+
     /**
      * Dual model configuration changed.
      * @param config - new configuration.
      * @mode emit
      */
     'dual-model/config-changed'(config: DualModelConfig): void
-    
+
     /**
      * Dual model collaboration strategy changed.
      * @param strategy - new strategy.

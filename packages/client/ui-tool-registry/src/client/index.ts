@@ -3,6 +3,7 @@
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -25,14 +26,9 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-tool-registry: copy dictionaries')
   const connection = ctx.get('connection') as ConnectionHandle
   const controller = new ToolRegistryController(connection.api)
-  const load = (): Promise<void> => controller.load()
-  const setCategoryFilter = (cat: string): void => { controller.setCategoryFilter(cat as never) }
-  const setSearchQuery = (q: string): void => { controller.setSearchQuery(q) }
-  const t = ctx.locale.bind(NS) as ToolRegistrySectionInjected['t'] & ((key: ToolRegistryKey, params?: Record<string, string | number>) => string)
-  const injected = (): ToolRegistrySectionInjected => ({
-    hooks: { toolRegistry: controller.store },
-    load, setCategoryFilter, setSearchQuery,
-  })
+  const useSnapshot = bindSnapshotSelector(controller.store)
+  const t = ctx.locale.bind(NS) as ToolRegistrySectionInjected['t']
+  const injected = (): ToolRegistrySectionInjected => ({ useSnapshot, t })
 
   ctx.effect(() => {
     const refresh = (): void => { refreshIfLoaded(controller) }

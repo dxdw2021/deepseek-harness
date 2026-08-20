@@ -258,6 +258,41 @@ describe('provider-routed retry policy', () => {
     })
   })
 
+  it('retries a STREAM_CLOSED thrown stream error under the default retryable codes', async () => {
+    vi.useFakeTimers()
+    const adapter = new ScriptedAdapter([
+      new LlmError('SSE stream ended without [DONE]', 'STREAM_CLOSED'),
+      textResponse('recovered'),
+    ])
+    // No retryableCodes override: a clean truncation without the terminal
+    // marker is a transient wire interruption, so the default policy recovers
+    // it exactly like a reset or timeout instead of aborting the whole turn.
+    ;({ ctx: context } = await harness(adapter))
+    const agent = context.agentLoop.create(SessionId('retry-stream-closed'), { provider: 'mock', model: 'mock' })
+    const scheduled = waitForRetry(context, agent, 1)
+
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    const event = await scheduled
+    expect(event.data.failure).toEqual({
+      message: 'SSE stream ended without [DONE]',
+      code: 'STREAM_CLOSED',
+    })
+
+    const idle = waitForIdle(context, agent)
+    await vi.advanceTimersByTimeAsync(500)
+    await idle
+
+    expect(adapter.requests).toHaveLength(2)
+    expect(agent.session.events.filter(event => event.type === 'assistant/message').map(event => ({
+      turn: event.data.turn,
+      step: event.data.step,
+    }))).toEqual([{ turn: 1, step: 1 }])
+    expect(agent.session.deriveMessages().at(-1)).toMatchObject({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'recovered' }],
+    })
+  })
+
   it('leaves partial failed chunks on their step without committing a message or tool side effect', async () => {
     vi.useFakeTimers()
     const adapter = new ScriptedAdapter([

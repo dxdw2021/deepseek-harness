@@ -1,0 +1,13 @@
+{
+  "name": "deepseek-harness",
+  "version": "0.1.0-rc.5",
+  "description": "DeepSeek Harness - AI Agent Framework",
+  "bin": {
+    "dsh": "./bin/dsh.js"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-settings": "workspace:^",
+    "@deepseek-ai/dsh-settings-toml": "workspace:^"
+  }
+}

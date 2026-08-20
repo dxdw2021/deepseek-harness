@@ -1,7 +1,7 @@
 /**
  * Model auto-detection capability for DeepSeek Harness.
  * Automatically detects and configures model providers based on API endpoints.
- * 
+ *
  * @module @deepseek-ai/dsh-model-auto-detect
  */
 
@@ -10,7 +10,7 @@ import z from '@deepseek-ai/schemastery'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 
 /** Model provider types */
-export type ModelProvider = 
+export type ModelProvider =
   | 'deepseek'
   | 'openai'
   | 'anthropic'
@@ -77,7 +77,7 @@ export interface ProviderDetectionResult {
 /** Model auto-detect service definition */
 export class ModelAutoDetectService extends Service {
   static inject = ['settings']
-  
+
   /** Known provider endpoints */
   private static readonly PROVIDER_ENDPOINTS: Record<ModelProvider, string[]> = {
     deepseek: [
@@ -109,7 +109,7 @@ export class ModelAutoDetectService extends Service {
     ],
     custom: [],
   }
-  
+
   /** Known model patterns */
   private static readonly MODEL_PATTERNS: Record<ModelProvider, RegExp[]> = {
     deepseek: [
@@ -138,31 +138,31 @@ export class ModelAutoDetectService extends Service {
     ],
     custom: [],
   }
-  
+
   /** Detected providers cache */
   private detectionCache: Map<string, ProviderDetectionResult> = new Map()
-  
+
   constructor(ctx: Context) {
     super(ctx, 'modelAutoDetect')
   }
-  
+
   /** Auto-detect provider from API endpoint */
   async detectProvider(endpoint: string, apiKey?: string): Promise<ProviderDetectionResult> {
     const cacheKey = `${endpoint}:${apiKey ? 'key' : 'no-key'}`
-    
+
     // Check cache
     const cached = this.detectionCache.get(cacheKey)
     if (cached) {
       return cached
     }
-    
+
     // Try endpoint pattern matching
     const endpointResult = this.detectByEndpoint(endpoint)
     if (endpointResult.confidence > 0.8) {
       this.detectionCache.set(cacheKey, endpointResult)
       return endpointResult
     }
-    
+
     // Try API probe if API key is provided
     if (apiKey) {
       try {
@@ -175,7 +175,7 @@ export class ModelAutoDetectService extends Service {
         // Probe failed, continue with other methods
       }
     }
-    
+
     // Return low confidence result
     const result: ProviderDetectionResult = {
       provider: 'custom',
@@ -184,15 +184,15 @@ export class ModelAutoDetectService extends Service {
       detectionMethod: 'endpoint',
       timestamp: new Date(),
     }
-    
+
     this.detectionCache.set(cacheKey, result)
     return result
   }
-  
+
   /** Detect provider by endpoint pattern */
   private detectByEndpoint(endpoint: string): ProviderDetectionResult {
     const normalizedEndpoint = endpoint.toLowerCase().replace(/\/$/, '')
-    
+
     for (const [provider, endpoints] of Object.entries(ModelAutoDetectService.PROVIDER_ENDPOINTS)) {
       for (const knownEndpoint of endpoints) {
         if (normalizedEndpoint.startsWith(knownEndpoint.toLowerCase())) {
@@ -206,7 +206,7 @@ export class ModelAutoDetectService extends Service {
         }
       }
     }
-    
+
     return {
       provider: 'custom',
       confidence: 0.1,
@@ -215,12 +215,12 @@ export class ModelAutoDetectService extends Service {
       timestamp: new Date(),
     }
   }
-  
+
   /** Detect provider by API probe */
   private async detectByProbe(endpoint: string, apiKey: string): Promise<ProviderDetectionResult> {
     // In a real implementation, this would make an API call to probe the endpoint
     // For now, return a mock result
-    
+
     // Try to get model list
     try {
       const response = await fetch(`${endpoint}/models`, {
@@ -229,11 +229,11 @@ export class ModelAutoDetectService extends Service {
           'Content-Type': 'application/json',
         },
       })
-      
+
       if (response.ok) {
         const data = await response.json() as { data?: Array<{ id: string }> }
         const models = data.data || []
-        
+
         // Detect provider from model names
         for (const model of models) {
           const detectedProvider = this.detectProviderFromModelName(model.id)
@@ -251,7 +251,7 @@ export class ModelAutoDetectService extends Service {
     } catch (error) {
       // Probe failed
     }
-    
+
     return {
       provider: 'custom',
       confidence: 0.2,
@@ -260,7 +260,7 @@ export class ModelAutoDetectService extends Service {
       timestamp: new Date(),
     }
   }
-  
+
   /** Detect provider from model name */
   private detectProviderFromModelName(modelName: string): ModelProvider {
     for (const [provider, patterns] of Object.entries(ModelAutoDetectService.MODEL_PATTERNS)) {
@@ -272,7 +272,7 @@ export class ModelAutoDetectService extends Service {
     }
     return 'custom'
   }
-  
+
   /** Get known models for a provider */
   private getKnownModels(provider: ModelProvider): DetectedModel[] {
     const knownModels: Record<ModelProvider, string[]> = {
@@ -284,16 +284,16 @@ export class ModelAutoDetectService extends Service {
       kimi: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
       custom: [],
     }
-    
-    return (knownModels[provider] || []).map(model => 
-      this.createDetectedModel(provider, model, '')
+
+    return (knownModels[provider] || []).map(model =>
+      this.createDetectedModel(provider, model, ''),
     )
   }
-  
+
   /** Create a detected model object */
   private createDetectedModel(provider: ModelProvider, model: string, endpoint: string): DetectedModel {
     const capabilities = this.getModelCapabilities(provider, model)
-    
+
     return {
       provider,
       model,
@@ -303,7 +303,7 @@ export class ModelAutoDetectService extends Service {
       detectionMethod: 'model-list',
     }
   }
-  
+
   /** Get model capabilities based on provider and model name */
   private getModelCapabilities(provider: ModelProvider, model: string): ModelCapabilities {
     // Default capabilities
@@ -317,7 +317,7 @@ export class ModelAutoDetectService extends Service {
       reasoningEffort: false,
       thinkingTokens: false,
     }
-    
+
     // Provider-specific capabilities
     switch (provider) {
       case 'deepseek':
@@ -336,7 +336,7 @@ export class ModelAutoDetectService extends Service {
           maxContextLength: 32768,
           maxOutputTokens: 4096,
         }
-      
+
       case 'openai':
         if (model.startsWith('gpt-4')) {
           return {
@@ -360,7 +360,7 @@ export class ModelAutoDetectService extends Service {
           maxContextLength: 16385,
           maxOutputTokens: 4096,
         }
-      
+
       case 'anthropic':
         return {
           ...defaults,
@@ -368,14 +368,14 @@ export class ModelAutoDetectService extends Service {
           maxContextLength: 200000,
           maxOutputTokens: 4096,
         }
-      
+
       case 'minimax':
         return {
           ...defaults,
           maxContextLength: 32768,
           maxOutputTokens: 4096,
         }
-      
+
       case 'zhipu':
         if (model.includes('4v')) {
           return {
@@ -390,21 +390,21 @@ export class ModelAutoDetectService extends Service {
           maxContextLength: 128000,
           maxOutputTokens: 4096,
         }
-      
+
       case 'kimi':
         const contextLength = model.includes('128k') ? 128000 :
-                             model.includes('32k') ? 32000 : 8000
+          model.includes('32k') ? 32000 : 8000
         return {
           ...defaults,
           maxContextLength: contextLength,
           maxOutputTokens: 4096,
         }
-      
+
       default:
         return defaults
     }
   }
-  
+
   /** Get model reasoning effort configuration */
   getModelReasoningEffort(provider: ModelProvider, model: string): ReasoningEffort {
     if (provider === 'deepseek' && model.includes('reasoner')) {
@@ -415,7 +415,7 @@ export class ModelAutoDetectService extends Service {
     }
     return 'disabled'
   }
-  
+
   /** Get model thinking token configuration */
   getModelThinkingTokens(provider: ModelProvider, model: string): number | undefined {
     if (provider === 'deepseek' && model.includes('reasoner')) {
@@ -423,12 +423,12 @@ export class ModelAutoDetectService extends Service {
     }
     return undefined
   }
-  
+
   /** Clear detection cache */
   clearCache(): void {
     this.detectionCache.clear()
   }
-  
+
   /** Get cached detection results */
   getCachedResults(): ProviderDetectionResult[] {
     return Array.from(this.detectionCache.values())
@@ -461,7 +461,7 @@ export function createModelAutoDetectPlugin(_config: Config = {}): {
     apply(ctx) {
       const service = new ModelAutoDetectService(ctx)
       ctx.modelAutoDetect = service
-      
+
       // Register settings section
       ctx.effect(() => {
         ctx.settings.register(
@@ -477,9 +477,9 @@ export function createModelAutoDetectPlugin(_config: Config = {}): {
               cacheTtl: 3600000,
               enableProbing: true,
             },
-          }
+          },
         )
-        
+
         return () => {
           // Cleanup
         }

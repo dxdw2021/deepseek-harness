@@ -1,7 +1,7 @@
 /**
  * Cache optimizer service for DeepSeek Harness.
  * Provides cache management, optimization, and performance monitoring.
- * 
+ *
  * @module @deepseek-ai/dsh-cache-optimizer
  */
 
@@ -102,10 +102,10 @@ export interface CacheOptimizerConfig {
 /** Cache optimizer service definition */
 export class CacheOptimizerService extends Service {
   static inject = ['settings']
-  
+
   /** Cache storage */
   private cache: Map<string, CacheEntry> = new Map()
-  
+
   /** Cache statistics */
   private stats: CacheStats = {
     totalEntries: 0,
@@ -116,13 +116,13 @@ export class CacheOptimizerService extends Service {
     averageAccessTime: 0,
     evictionCount: 0,
   }
-  
+
   /** Concurrency queue */
   private concurrencyQueue: ConcurrencyTask[] = []
-  
+
   /** Running tasks */
   private runningTasks: Map<string, ConcurrencyTask> = new Map()
-  
+
   /** Performance metrics */
   private metrics: PerformanceMetrics = {
     requestCount: 0,
@@ -132,10 +132,10 @@ export class CacheOptimizerService extends Service {
     errorRate: 0,
     throughput: 0,
   }
-  
+
   /** Response times for percentile calculation */
   private responseTimes: number[] = []
-  
+
   /** Configuration */
   private config: CacheOptimizerConfig = {
     enabled: true,
@@ -148,22 +148,22 @@ export class CacheOptimizerService extends Service {
     enablePerformanceMonitoring: true,
     performanceMonitoringIntervalMs: 60000, // 1 minute
   }
-  
+
   constructor(ctx: Context) {
     super(ctx, 'cacheOptimizer')
   }
-  
+
   /** Get value from cache */
   get<T>(key: string): T | undefined {
     if (!this.config.enabled) return undefined
-    
+
     const entry = this.cache.get(key)
     if (!entry) {
       this.stats.missCount++
       this.updateHitRate()
       return undefined
     }
-    
+
     // Check TTL
     const now = Date.now()
     if (now - entry.createdAt.getTime() > entry.ttl) {
@@ -172,27 +172,27 @@ export class CacheOptimizerService extends Service {
       this.updateHitRate()
       return undefined
     }
-    
+
     // Update access statistics
     entry.lastAccessedAt = new Date()
     entry.accessCount++
-    
+
     this.stats.hitCount++
     this.updateHitRate()
-    
+
     return entry.value as T
   }
-  
+
   /** Set value in cache */
   set<T>(key: string, value: T, ttlMs?: number): void {
     if (!this.config.enabled) return
-    
+
     const ttl = ttlMs || this.config.defaultTtlMs
     const size = this.estimateSize(value)
-    
+
     // Check if we need to evict entries
     this.ensureCacheCapacity(size)
-    
+
     const entry: CacheEntry<T> = {
       key,
       value,
@@ -202,11 +202,11 @@ export class CacheOptimizerService extends Service {
       size,
       accessCount: 0,
     }
-    
+
     this.cache.set(key, entry)
     this.updateStats()
   }
-  
+
   /** Delete value from cache */
   delete(key: string): boolean {
     const deleted = this.cache.delete(key)
@@ -215,29 +215,29 @@ export class CacheOptimizerService extends Service {
     }
     return deleted
   }
-  
+
   /** Clear cache */
   clear(): void {
     this.cache.clear()
     this.updateStats()
     this.ctx.emit('cache-optimizer/cache-cleared')
   }
-  
+
   /** Get cache statistics */
   getStats(): CacheStats {
     return { ...this.stats }
   }
-  
+
   /** Get cache entries */
   getEntries(): CacheEntry[] {
     return Array.from(this.cache.values())
   }
-  
+
   /** Get cache entry by key */
   getEntry(key: string): CacheEntry | undefined {
     return this.cache.get(key)
   }
-  
+
   /** Estimate size of value in bytes */
   private estimateSize(value: unknown): number {
     // Simple size estimation
@@ -253,36 +253,36 @@ export class CacheOptimizerService extends Service {
     }
     return 0
   }
-  
+
   /** Ensure cache has capacity for new entry */
   private ensureCacheCapacity(newEntrySize: number): void {
     // Check entry limit
     while (this.cache.size >= this.config.maxCacheEntries) {
       this.evictEntry()
     }
-    
+
     // Check size limit
     while (this.stats.totalSize + newEntrySize > this.config.maxCacheSize) {
       this.evictEntry()
     }
   }
-  
+
   /** Evict entry from cache */
   private evictEntry(): void {
     if (this.cache.size === 0) return
-    
+
     if (this.config.enableLruEviction) {
       // LRU eviction: find least recently used entry
       let oldestEntry: CacheEntry | undefined
       let oldestKey: string | undefined
-      
+
       for (const [key, entry] of this.cache) {
         if (!oldestEntry || entry.lastAccessedAt < oldestEntry.lastAccessedAt) {
           oldestEntry = entry
           oldestKey = key
         }
       }
-      
+
       if (oldestKey) {
         this.cache.delete(oldestKey)
         this.stats.evictionCount++
@@ -295,40 +295,40 @@ export class CacheOptimizerService extends Service {
         this.stats.evictionCount++
       }
     }
-    
+
     this.updateStats()
   }
-  
+
   /** Update cache statistics */
   private updateStats(): void {
     let totalSize = 0
     for (const entry of this.cache.values()) {
       totalSize += entry.size
     }
-    
+
     this.stats.totalEntries = this.cache.size
     this.stats.totalSize = totalSize
   }
-  
+
   /** Update hit rate */
   private updateHitRate(): void {
     const total = this.stats.hitCount + this.stats.missCount
     this.stats.hitRate = total > 0 ? this.stats.hitCount / total : 0
   }
-  
+
   /** Execute task with concurrency control */
   async executeWithConcurrency<T>(task: ConcurrencyTask<T>): Promise<T> {
     if (!this.config.enabled || !this.config.enableConcurrency) {
       return task.execute()
     }
-    
+
     return new Promise((resolve, reject) => {
       const wrappedTask: ConcurrencyTask<T> = {
         ...task,
         status: 'pending',
         result: undefined,
       }
-      
+
       // Check if we can run immediately
       if (this.runningTasks.size < this.config.maxConcurrentTasks) {
         this.runTask(wrappedTask, resolve, reject)
@@ -336,7 +336,7 @@ export class CacheOptimizerService extends Service {
         // Add to queue
         this.concurrencyQueue.push(wrappedTask)
         this.concurrencyQueue.sort((a, b) => b.priority - a.priority)
-        
+
         // Set up timeout if specified
         if (task.timeoutMs) {
           setTimeout(() => {
@@ -349,41 +349,41 @@ export class CacheOptimizerService extends Service {
       }
     })
   }
-  
+
   /** Run a task */
   private runTask<T>(
     task: ConcurrencyTask<T>,
     resolve: (value: T) => void,
-    reject: (reason: unknown) => void
+    reject: (reason: unknown) => void,
   ): void {
     task.status = 'running'
     this.runningTasks.set(task.id, task)
-    
+
     const startTime = Date.now()
-    
+
     task.execute()
       .then((result) => {
         const duration = Date.now() - startTime
         this.recordResponseTime(duration)
-        
+
         task.status = 'completed'
         this.runningTasks.delete(task.id)
-        
+
         this.processQueue()
         resolve(result)
       })
       .catch((error) => {
         const duration = Date.now() - startTime
         this.recordResponseTime(duration)
-        
+
         task.status = 'failed'
         this.runningTasks.delete(task.id)
-        
+
         this.processQueue()
         reject(error)
       })
   }
-  
+
   /** Process concurrency queue */
   private processQueue(): void {
     while (
@@ -400,44 +400,44 @@ export class CacheOptimizerService extends Service {
       }
     }
   }
-  
+
   /** Record response time */
   private recordResponseTime(time: number): void {
     this.responseTimes.push(time)
-    
+
     // Keep only last 1000 response times
     if (this.responseTimes.length > 1000) {
       this.responseTimes = this.responseTimes.slice(-1000)
     }
-    
+
     this.updateMetrics()
   }
-  
+
   /** Update performance metrics */
   private updateMetrics(): void {
     if (this.responseTimes.length === 0) return
-    
+
     const sorted = [...this.responseTimes].sort((a, b) => a - b)
     const sum = sorted.reduce((a, b) => a + b, 0)
-    
+
     this.metrics.requestCount++
     this.metrics.averageResponseTime = sum / sorted.length
     this.metrics.p95ResponseTime = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.95)] || 0 : 0
     this.metrics.p99ResponseTime = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.99)] || 0 : 0
     this.metrics.throughput = this.metrics.requestCount / (Date.now() / 1000)
   }
-  
+
   /** Get performance metrics */
   getMetrics(): PerformanceMetrics {
     return { ...this.metrics }
   }
-  
+
   /** Update configuration */
   updateConfig(config: Partial<CacheOptimizerConfig>): void {
     this.config = { ...this.config, ...config }
     this.ctx.emit('cache-optimizer/config-changed', this.config)
   }
-  
+
   /** Get configuration */
   getConfig(): CacheOptimizerConfig {
     return { ...this.config }
@@ -482,12 +482,12 @@ export function createCacheOptimizerPlugin(config: Config = {}): {
     apply(ctx) {
       const service = new CacheOptimizerService(ctx)
       ctx.cacheOptimizer = service
-      
+
       // Apply configuration
       if (Object.keys(config).length > 0) {
         service.updateConfig(config)
       }
-      
+
       // Register settings section
       ctx.effect(() => {
         const scope = ctx.settings.register(
@@ -515,14 +515,14 @@ export function createCacheOptimizerPlugin(config: Config = {}): {
               enablePerformanceMonitoring: true,
               performanceMonitoringIntervalMs: 60000,
             },
-          }
+          },
         )
-        
+
         // Watch for settings changes
         scope.watch((next) => {
           service.updateConfig(next)
         })
-        
+
         return () => {
           // Cleanup
         }
@@ -546,7 +546,7 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'cache-optimizer/cache-cleared'(): void
-    
+
     /**
      * Cache optimizer configuration changed.
      * @param config - new configuration.

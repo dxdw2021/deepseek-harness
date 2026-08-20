@@ -3,6 +3,7 @@
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -25,12 +26,12 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-dual-model: copy dictionaries')
   const connection = ctx.get('connection') as ConnectionHandle
   const controller = new DualModelController(connection.api)
-  const load = (): Promise<void> => controller.load()
-  const toggleEnabled = (enabled: boolean): Promise<void> => controller.toggleEnabled(enabled)
-  const t = ctx.locale.bind(NS) as DualModelSectionInjected['t'] & ((key: DualModelKey) => string)
+  const useSnapshot = bindSnapshotSelector(controller.store)
+  const t = ctx.locale.bind(NS) as DualModelSectionInjected['t']
   const injected = (): DualModelSectionInjected => ({
-    hooks: { dualModel: controller.store },
-    load, toggleEnabled,
+    useSnapshot,
+    toggleEnabled: (enabled) => controller.toggleEnabled(enabled),
+    t,
   })
 
   ctx.effect(() => {

@@ -1,7 +1,7 @@
 /**
  * Build system service for DeepSeek Harness.
  * Provides build pipeline management, release process, and code signing.
- * 
+ *
  * @module @deepseek-ai/dsh-build-system
  */
 
@@ -167,13 +167,13 @@ export interface BuildSystemConfig {
 /** Build system service definition */
 export class BuildSystemService extends Service {
   static inject = ['settings']
-  
+
   /** Build steps */
   private steps: Map<string, BuildStep> = new Map()
-  
+
   /** Build history */
   private buildHistory: BuildResult[] = []
-  
+
   /** Configuration */
   private config: BuildSystemConfig = {
     enabled: true,
@@ -185,14 +185,14 @@ export class BuildSystemService extends Service {
     enableParallelBuilds: true,
     maxConcurrentBuilds: 3,
   }
-  
+
   constructor(ctx: Context) {
     super(ctx, 'buildSystem')
-    
+
     // Register built-in build steps
     this.registerBuiltinSteps()
   }
-  
+
   /** Register built-in build steps */
   private registerBuiltinSteps(): void {
     // TypeScript compilation step
@@ -203,11 +203,11 @@ export class BuildSystemService extends Service {
       execute: async () => {
         const start = Date.now()
         const logs: string[] = []
-        
+
         // In a real implementation, this would run TypeScript compiler
         logs.push('Compiling TypeScript files...')
         logs.push('TypeScript compilation completed successfully')
-        
+
         return {
           success: true,
           duration: Date.now() - start,
@@ -217,7 +217,7 @@ export class BuildSystemService extends Service {
       required: true,
       dependencies: [],
     })
-    
+
     // Bundle step
     this.registerStep({
       name: 'bundle',
@@ -226,11 +226,11 @@ export class BuildSystemService extends Service {
       execute: async () => {
         const start = Date.now()
         const logs: string[] = []
-        
+
         // In a real implementation, this would bundle the application
         logs.push('Bundling application code...')
         logs.push('Bundling completed successfully')
-        
+
         return {
           success: true,
           duration: Date.now() - start,
@@ -240,7 +240,7 @@ export class BuildSystemService extends Service {
       required: true,
       dependencies: ['typescript'],
     })
-    
+
     // Minification step
     this.registerStep({
       name: 'minify',
@@ -249,7 +249,7 @@ export class BuildSystemService extends Service {
       execute: async (ctx) => {
         const start = Date.now()
         const logs: string[] = []
-        
+
         if (!ctx.config.enableMinification) {
           logs.push('Minification skipped (disabled)')
           return {
@@ -258,11 +258,11 @@ export class BuildSystemService extends Service {
             logs,
           }
         }
-        
+
         // In a real implementation, this would minify the code
         logs.push('Minifying code...')
         logs.push('Minification completed successfully')
-        
+
         return {
           success: true,
           duration: Date.now() - start,
@@ -272,7 +272,7 @@ export class BuildSystemService extends Service {
       required: false,
       dependencies: ['bundle'],
     })
-    
+
     // Code signing step
     this.registerStep({
       name: 'sign',
@@ -281,7 +281,7 @@ export class BuildSystemService extends Service {
       execute: async (ctx) => {
         const start = Date.now()
         const logs: string[] = []
-        
+
         if (!ctx.config.enableCodeSigning) {
           logs.push('Code signing skipped (disabled)')
           return {
@@ -290,11 +290,11 @@ export class BuildSystemService extends Service {
             logs,
           }
         }
-        
+
         // In a real implementation, this would sign the artifacts
         logs.push('Signing build artifacts...')
         logs.push('Code signing completed successfully')
-        
+
         return {
           success: true,
           duration: Date.now() - start,
@@ -304,7 +304,7 @@ export class BuildSystemService extends Service {
       required: false,
       dependencies: ['bundle'],
     })
-    
+
     // Archive step
     this.registerStep({
       name: 'archive',
@@ -313,11 +313,11 @@ export class BuildSystemService extends Service {
       execute: async (context) => {
         const start = Date.now()
         const logs: string[] = []
-        
+
         // In a real implementation, this would create archives
         logs.push('Creating distribution archives...')
         logs.push('Archive creation completed successfully')
-        
+
         const artifacts: BuildArtifact[] = [
           {
             name: `dsh-${context.config.version}-${context.config.platform}-${context.config.architecture}.tar.gz`,
@@ -326,7 +326,7 @@ export class BuildSystemService extends Service {
             size: 1024 * 1024, // 1MB mock
           },
         ]
-        
+
         return {
           success: true,
           duration: Date.now() - start,
@@ -338,13 +338,13 @@ export class BuildSystemService extends Service {
       dependencies: ['bundle'],
     })
   }
-  
+
   /** Register a build step */
   registerStep(step: BuildStep): void {
     this.steps.set(step.name, step)
     this.ctx.emit('build-system/step-registered', step.name)
   }
-  
+
   /** Remove a build step */
   removeStep(name: string): boolean {
     const removed = this.steps.delete(name)
@@ -353,28 +353,28 @@ export class BuildSystemService extends Service {
     }
     return removed
   }
-  
+
   /** Get a build step */
   getStep(name: string): BuildStep | undefined {
     return this.steps.get(name)
   }
-  
+
   /** Get all build steps */
   getSteps(): BuildStep[] {
     return Array.from(this.steps.values()).sort((a, b) => a.order - b.order)
   }
-  
+
   /** Execute a build */
   async build(config: BuildConfig): Promise<BuildResult> {
     if (!this.config.enabled) {
       throw new Error('Build system is disabled')
     }
-    
+
     const startTime = Date.now()
     const artifacts: BuildArtifact[] = []
     const logs: string[] = []
     const errors: string[] = []
-    
+
     // Create build context
     const context: BuildContext = {
       config,
@@ -383,32 +383,32 @@ export class BuildSystemService extends Service {
       logs,
       metadata: {},
     }
-    
+
     this.ctx.emit('build-system/build-started', config)
-    
+
     // Get steps to execute
     const steps = this.getSteps()
-    
+
     for (const step of steps) {
       // Check dependencies
-      const dependenciesMet = step.dependencies.every(dep => 
-        artifacts.some(a => a.name.includes(dep))
+      const dependenciesMet = step.dependencies.every(dep =>
+        artifacts.some(a => a.name.includes(dep)),
       )
-      
+
       if (!dependenciesMet && step.required) {
         errors.push(`Dependencies not met for required step: ${step.name}`)
         continue
       }
-      
+
       try {
         const result = await step.execute(context)
-        
+
         logs.push(...result.logs)
-        
+
         if (result.artifacts) {
           artifacts.push(...result.artifacts)
         }
-        
+
         if (!result.success) {
           errors.push(`Step ${step.name} failed`)
           if (step.required) {
@@ -423,10 +423,10 @@ export class BuildSystemService extends Service {
         }
       }
     }
-    
+
     const duration = Date.now() - startTime
     const success = errors.length === 0
-    
+
     const buildResult: BuildResult = {
       success,
       duration,
@@ -434,26 +434,26 @@ export class BuildSystemService extends Service {
       logs,
       errors,
     }
-    
+
     // Store build history
     this.buildHistory.push(buildResult)
     if (this.buildHistory.length > 100) {
       this.buildHistory = this.buildHistory.slice(-100)
     }
-    
+
     this.ctx.emit('build-system/build-completed', buildResult)
-    
+
     return buildResult
   }
-  
+
   /** Create a release */
   async release(config: ReleaseConfig): Promise<ReleaseResult> {
     if (!this.config.enabled) {
       throw new Error('Build system is disabled')
     }
-    
+
     this.ctx.emit('build-system/release-started', config)
-    
+
     // In a real implementation, this would create a release
     // For now, return a mock result
     const result: ReleaseResult = {
@@ -463,12 +463,12 @@ export class BuildSystemService extends Service {
       assets: config.assets,
       timestamp: new Date(),
     }
-    
+
     this.ctx.emit('build-system/release-completed', result)
-    
+
     return result
   }
-  
+
   /** Get build history */
   getBuildHistory(limit?: number): BuildResult[] {
     if (limit) {
@@ -476,19 +476,19 @@ export class BuildSystemService extends Service {
     }
     return [...this.buildHistory]
   }
-  
+
   /** Clear build history */
   clearBuildHistory(): void {
     this.buildHistory = []
     this.ctx.emit('build-system/history-cleared')
   }
-  
+
   /** Update configuration */
   updateConfig(config: Partial<BuildSystemConfig>): void {
     this.config = { ...this.config, ...config }
     this.ctx.emit('build-system/config-changed', this.config)
   }
-  
+
   /** Get configuration */
   getConfig(): BuildSystemConfig {
     return { ...this.config }
@@ -531,12 +531,12 @@ export function createBuildSystemPlugin(config: Config = {}): {
     apply(ctx) {
       const service = new BuildSystemService(ctx)
       ctx.buildSystem = service
-      
+
       // Apply configuration
       if (Object.keys(config).length > 0) {
         service.updateConfig(config)
       }
-      
+
       // Register settings section
       ctx.effect(() => {
         const scope = ctx.settings.register(
@@ -573,14 +573,14 @@ export function createBuildSystemPlugin(config: Config = {}): {
               enableParallelBuilds: true,
               maxConcurrentBuilds: 3,
             },
-          }
+          },
         )
-        
+
         // Watch for settings changes
         scope.watch((next) => {
           service.updateConfig(next)
         })
-        
+
         return () => {
           // Cleanup
         }
@@ -605,48 +605,48 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'build-system/step-registered'(name: string): void
-    
+
     /**
      * Build step removed.
      * @param name - step name.
      * @mode emit
      */
     'build-system/step-removed'(name: string): void
-    
+
     /**
      * Build started.
      * @param config - build configuration.
      * @mode emit
      */
     'build-system/build-started'(config: BuildConfig): void
-    
+
     /**
      * Build completed.
      * @param result - build result.
      * @mode emit
      */
     'build-system/build-completed'(result: BuildResult): void
-    
+
     /**
      * Release started.
      * @param config - release configuration.
      * @mode emit
      */
     'build-system/release-started'(config: ReleaseConfig): void
-    
+
     /**
      * Release completed.
      * @param result - release result.
      * @mode emit
      */
     'build-system/release-completed'(result: ReleaseResult): void
-    
+
     /**
      * Build history cleared.
      * @mode emit
      */
     'build-system/history-cleared'(): void
-    
+
     /**
      * Build system configuration changed.
      * @param config - new configuration.

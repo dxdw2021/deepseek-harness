@@ -86,8 +86,9 @@ export class ExecutionModeController {
     const generation = ++this.generation
     this.store.update((state) => { state.currentMode = mode })
     try {
-      const view = (await this.api.settings.describe({})).result.value
-      const ns = view.namespaces.find(e => e.ns === 'execution-mode')
+      const describeResult = (await this.api.settings.describe({})).result
+      if (!describeResult.ok) throw new Error(describeResult.error.message)
+      const ns = describeResult.value.namespaces.find((e: { ns: string }) => e.ns === 'execution-mode')
       if (ns === undefined) return
       const response = await this.api.settings.mutate({
         ns: 'execution-mode',

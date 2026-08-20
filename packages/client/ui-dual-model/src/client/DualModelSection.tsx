@@ -2,27 +2,21 @@
  * Dual Model settings section.
  */
 
-import { useEffect } from 'react'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-web-react'
 import type { DualModelState } from './store.ts'
 import type { DualModelKey } from './locales.ts'
 
 export interface DualModelSectionInjected {
-  hooks: { dualModel: SnapshotStore<DualModelState> }
-  load: () => Promise<void>
+  useSnapshot: SnapshotSelectorHook<DualModelState>
   toggleEnabled: (enabled: boolean) => Promise<void>
+  t: (key: DualModelKey) => string
 }
 
-export type DualModelSectionProps =
-  PropsRuntime<'settings.section'>
-  & InjectFace<DualModelSectionInjected>
-  & { t: (key: DualModelKey) => string; close: () => void }
+export type DualModelSectionProps = Partial<DualModelSectionInjected>
 
-export function DualModelSection({ hooks, load, toggleEnabled, t, close }: DualModelSectionProps): React.ReactElement {
-  const state = hooks.useDualModel(snapshot => snapshot)
-
-  useEffect(() => { void load() }, [load])
+export function DualModelSection({ useSnapshot, toggleEnabled, t }: DualModelSectionProps): React.ReactElement | null {
+  const state = useSnapshot?.(snapshot => snapshot)
+  if (!state || !t) return null
 
   if (state.status === 'loading') return <div>{t('status.loading')}</div>
   if (state.status === 'error') return <div>{t('status.error')}: {state.error}</div>
@@ -32,7 +26,7 @@ export function DualModelSection({ hooks, load, toggleEnabled, t, close }: DualM
       <h2>{t('title')}</h2>
       <p>{t('description')}</p>
       <label>
-        <input type="checkbox" checked={state.enabled} onChange={(e) => void toggleEnabled(e.target.checked)} />
+        <input type="checkbox" checked={state.enabled} onChange={(e) => void toggleEnabled?.(e.target.checked)} />
         {t('enabled')}
       </label>
       {state.enabled && (
@@ -43,14 +37,13 @@ export function DualModelSection({ hooks, load, toggleEnabled, t, close }: DualM
             <h3>{t('strategy')}</h3>
             {(['sequential', 'parallel', 'iterative', 'adaptive'] as const).map((s) => (
               <div key={s} className={state.strategy === s ? 'active' : ''}>
-                <h4>{t(`strategy.${s}`)}</h4>
-                <p>{t(`strategy.${s}.description`)}</p>
+                <h4>{t(`strategy.${s}` as DualModelKey)}</h4>
+                <p>{t(`strategy.${s}.description` as DualModelKey)}</p>
               </div>
             ))}
           </div>
         </>
       )}
-      <button onClick={close}>{t('actions.cancel')}</button>
     </div>
   )
 }

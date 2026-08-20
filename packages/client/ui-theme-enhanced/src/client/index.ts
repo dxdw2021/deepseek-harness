@@ -3,6 +3,7 @@
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -25,13 +26,10 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-theme-enhanced: copy dictionaries')
   const connection = ctx.get('connection') as ConnectionHandle
   const controller = new ThemeEnhancedController(connection.api)
-  const load = (): Promise<void> => controller.load()
+  const useSnapshot = bindSnapshotSelector(controller.store)
   const selectTheme = (id: string): Promise<void> => controller.selectTheme(id)
-  const t = ctx.locale.bind(NS) as ThemeEnhancedSectionInjected['t'] & ((key: ThemeEnhancedKey) => string)
-  const injected = (): ThemeEnhancedSectionInjected => ({
-    hooks: { themeEnhanced: controller.store },
-    load, selectTheme,
-  })
+  const t = ctx.locale.bind(NS) as ThemeEnhancedSectionInjected['t']
+  const injected = (): ThemeEnhancedSectionInjected => ({ useSnapshot, selectTheme, t })
 
   ctx.effect(() => {
     const refresh = (): void => { refreshIfLoaded(controller) }

@@ -1,7 +1,7 @@
 /**
  * Bot/IM integration service for DeepSeek Harness.
  * Provides integration with messaging platforms like Feishu/Lark, WeChat, QQ.
- * 
+ *
  * @module @deepseek-ai/dsh-bot-im-integration
  */
 
@@ -104,16 +104,16 @@ export interface BotImIntegrationConfig {
 /** Bot IM integration service definition */
 export class BotImIntegrationService extends Service {
   static inject = ['settings', 'toolRegistry']
-  
+
   /** Platform configurations */
   private platformConfigs: Map<PlatformType, PlatformConfig> = new Map()
-  
+
   /** Event handlers */
   private eventHandlers: Map<string, BotEventHandler[]> = new Map()
-  
+
   /** Message history */
   private messageHistory: BotMessage[] = []
-  
+
   /** Configuration */
   private config: BotImIntegrationConfig = {
     enabled: true,
@@ -124,21 +124,21 @@ export class BotImIntegrationService extends Service {
     maxMessageLength: 4096,
     enableMessageLogging: true,
   }
-  
+
   constructor(ctx: Context) {
     super(ctx, 'botImIntegration')
   }
-  
+
   /** Configure a platform */
   configurePlatform(platformConfig: PlatformConfig): void {
     if (!this.config.enabled) {
       throw new Error('Bot IM integration is disabled')
     }
-    
+
     this.platformConfigs.set(platformConfig.type, platformConfig)
     this.ctx.emit('bot-im-integration/platform-configured', platformConfig.type)
   }
-  
+
   /** Remove platform configuration */
   removePlatform(platform: PlatformType): boolean {
     const removed = this.platformConfigs.delete(platform)
@@ -147,24 +147,24 @@ export class BotImIntegrationService extends Service {
     }
     return removed
   }
-  
+
   /** Get platform configuration */
   getPlatformConfig(platform: PlatformType): PlatformConfig | undefined {
     return this.platformConfigs.get(platform)
   }
-  
+
   /** Get all configured platforms */
   getConfiguredPlatforms(): PlatformType[] {
     return Array.from(this.platformConfigs.keys())
   }
-  
+
   /** Register event handler */
   on(event: string, handler: (message: BotMessage) => Promise<BotResponse | null>): () => void {
     const handlers = this.eventHandlers.get(event) || []
     const newHandler: BotEventHandler = { event, handler }
     handlers.push(newHandler)
     this.eventHandlers.set(event, handlers)
-    
+
     // Return disposer
     return () => {
       const currentHandlers = this.eventHandlers.get(event) || []
@@ -174,31 +174,31 @@ export class BotImIntegrationService extends Service {
       }
     }
   }
-  
+
   /** Process incoming message */
   async processMessage(message: BotMessage): Promise<BotResponse | null> {
     if (!this.config.enabled) {
       return null
     }
-    
+
     // Log message
     if (this.config.enableMessageLogging) {
       this.messageHistory.push(message)
-      
+
       // Trim history if needed
       if (this.messageHistory.length > 1000) {
         this.messageHistory = this.messageHistory.slice(-1000)
       }
     }
-    
+
     // Emit message received event
     this.ctx.emit('bot-im-integration/message-received', message)
-    
+
     // Check if it's a command
     if (message.content.startsWith(this.config.commandPrefix)) {
       return this.processCommand(message)
     }
-    
+
     // Process through event handlers
     const handlers = this.eventHandlers.get('message') || []
     for (const { handler } of handlers) {
@@ -212,7 +212,7 @@ export class BotImIntegrationService extends Service {
         // Continue with other handlers
       }
     }
-    
+
     // Auto-reply if enabled
     if (this.config.enableAutoReply) {
       return {
@@ -220,20 +220,20 @@ export class BotImIntegrationService extends Service {
         type: 'text',
       }
     }
-    
+
     return null
   }
-  
+
   /** Process command */
   private async processCommand(message: BotMessage): Promise<BotResponse | null> {
     const command = message.content.slice(this.config.commandPrefix.length).trim()
     const [commandName, ...args] = command.split(/\s+/)
-    
+
     // Emit command received event
     if (commandName) {
       this.ctx.emit('bot-im-integration/command-received', message.id, commandName, args)
     }
-    
+
     // Process through command handlers
     const handlers = this.eventHandlers.get('command') || []
     for (const { handler } of handlers) {
@@ -249,28 +249,28 @@ export class BotImIntegrationService extends Service {
         // Continue with other handlers
       }
     }
-    
+
     // Unknown command
     return {
       content: commandName ? `Unknown command: ${commandName}` : 'Invalid command',
       type: 'text',
     }
   }
-  
+
   /** Send message to platform */
   async sendMessage(platform: PlatformType, chatId: string, response: BotResponse): Promise<boolean> {
     const platformConfig = this.platformConfigs.get(platform)
     if (!platformConfig) {
       return false
     }
-    
+
     // In a real implementation, this would send the message through the platform API
     // For now, emit an event
     this.ctx.emit('bot-im-integration/message-send-requested', platform, chatId, response)
-    
+
     return true
   }
-  
+
   /** Get message history */
   getMessageHistory(limit?: number): BotMessage[] {
     if (limit) {
@@ -278,19 +278,19 @@ export class BotImIntegrationService extends Service {
     }
     return [...this.messageHistory]
   }
-  
+
   /** Clear message history */
   clearMessageHistory(): void {
     this.messageHistory = []
     this.ctx.emit('bot-im-integration/history-cleared')
   }
-  
+
   /** Update configuration */
   updateConfig(config: Partial<BotImIntegrationConfig>): void {
     this.config = { ...this.config, ...config }
     this.ctx.emit('bot-im-integration/config-changed', this.config)
   }
-  
+
   /** Get configuration */
   getConfig(): BotImIntegrationConfig {
     return { ...this.config }
@@ -331,12 +331,12 @@ export function createBotImIntegrationPlugin(config: Config = {}): {
     apply(ctx) {
       const service = new BotImIntegrationService(ctx)
       ctx.botImIntegration = service
-      
+
       // Apply configuration
       if (Object.keys(config).length > 0) {
         service.updateConfig(config)
       }
-      
+
       // Register settings section
       ctx.effect(() => {
         const scope = ctx.settings.register(
@@ -368,14 +368,14 @@ export function createBotImIntegrationPlugin(config: Config = {}): {
               maxMessageLength: 4096,
               enableMessageLogging: true,
             },
-          }
+          },
         )
-        
+
         // Watch for settings changes
         scope.watch((next) => {
           service.updateConfig(next)
         })
-        
+
         return () => {
           // Cleanup
         }
@@ -400,21 +400,21 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'bot-im-integration/platform-configured'(platform: PlatformType): void
-    
+
     /**
      * Platform removed.
      * @param platform - platform type.
      * @mode emit
      */
     'bot-im-integration/platform-removed'(platform: PlatformType): void
-    
+
     /**
      * Message received.
      * @param message - received message.
      * @mode emit
      */
     'bot-im-integration/message-received'(message: BotMessage): void
-    
+
     /**
      * Message sent.
      * @param messageId - original message ID.
@@ -422,7 +422,7 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'bot-im-integration/message-sent'(messageId: string, response: BotResponse): void
-    
+
     /**
      * Command received.
      * @param messageId - message ID.
@@ -431,7 +431,7 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'bot-im-integration/command-received'(messageId: string, command: string, args: string[]): void
-    
+
     /**
      * Command executed.
      * @param messageId - message ID.
@@ -440,7 +440,7 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'bot-im-integration/command-executed'(messageId: string, command: string, success: boolean): void
-    
+
     /**
      * Message send requested.
      * @param platform - platform type.
@@ -449,13 +449,13 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'bot-im-integration/message-send-requested'(platform: PlatformType, chatId: string, response: BotResponse): void
-    
+
     /**
      * History cleared.
      * @mode emit
      */
     'bot-im-integration/history-cleared'(): void
-    
+
     /**
      * Bot IM integration configuration changed.
      * @param config - new configuration.

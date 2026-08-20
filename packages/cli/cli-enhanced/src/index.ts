@@ -1,7 +1,7 @@
 /**
  * CLI enhanced service for DeepSeek Harness.
  * Provides enhanced CLI features like interactive mode, session management, and output formatting.
- * 
+ *
  * @module @deepseek-ai/dsh-cli-enhanced
  */
 
@@ -88,13 +88,13 @@ export interface CliHistoryEntry {
 /** CLI enhanced service definition */
 export class CliEnhancedService extends Service {
   static inject = ['settings', 'sessions']
-  
+
   /** Registered commands */
   private commands: Map<string, CliCommand> = new Map()
-  
+
   /** Command history */
   private history: CliHistoryEntry[] = []
-  
+
   /** Configuration */
   private config: CliEnhancedConfig = {
     enabled: true,
@@ -107,26 +107,26 @@ export class CliEnhancedService extends Service {
     enableAutoCompletion: true,
     sessionTimeoutMs: 3600000, // 1 hour
   }
-  
+
   constructor(ctx: Context) {
     super(ctx, 'cliEnhanced')
   }
-  
+
   /** Register a CLI command */
   registerCommand(command: CliCommand): () => void {
     if (!this.config.enabled) {
       throw new Error('CLI enhanced is disabled')
     }
-    
+
     this.commands.set(command.name, command)
-    
+
     // Register aliases
     for (const alias of command.aliases) {
       this.commands.set(alias, command)
     }
-    
+
     this.ctx.emit('cli-enhanced/command-registered', command.name)
-    
+
     // Return disposer
     return () => {
       this.commands.delete(command.name)
@@ -136,12 +136,12 @@ export class CliEnhancedService extends Service {
       this.ctx.emit('cli-enhanced/command-unregistered', command.name)
     }
   }
-  
+
   /** Get a command by name */
   getCommand(name: string): CliCommand | undefined {
     return this.commands.get(name)
   }
-  
+
   /** Get all registered commands */
   getCommands(): CliCommand[] {
     const uniqueCommands = new Map<string, CliCommand>()
@@ -150,21 +150,21 @@ export class CliEnhancedService extends Service {
     }
     return Array.from(uniqueCommands.values())
   }
-  
+
   /** Execute a command */
   async executeCommand(commandName: string, args: Record<string, unknown>): Promise<unknown> {
     const command = this.commands.get(commandName)
     if (!command) {
       throw new Error(`Unknown command: ${commandName}`)
     }
-    
+
     const startTime = Date.now()
     const historyId = `hist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    
+
     try {
       const result = await command.handler(args)
       const duration = Date.now() - startTime
-      
+
       // Add to history
       if (this.config.enableHistory) {
         this.addHistoryEntry({
@@ -176,14 +176,14 @@ export class CliEnhancedService extends Service {
           success: true,
         })
       }
-      
+
       this.ctx.emit('cli-enhanced/command-executed', commandName, true, duration)
-      
+
       return result
     } catch (error) {
       const duration = Date.now() - startTime
       const errorMessage = error instanceof Error ? error.message : String(error)
-      
+
       // Add to history
       if (this.config.enableHistory) {
         this.addHistoryEntry({
@@ -196,25 +196,25 @@ export class CliEnhancedService extends Service {
           error: errorMessage,
         })
       }
-      
+
       this.ctx.emit('cli-enhanced/command-executed', commandName, false, duration)
-      
+
       throw error
     }
   }
-  
+
   /** Add history entry */
   private addHistoryEntry(entry: CliHistoryEntry): void {
     this.history.push(entry)
-    
+
     // Trim history if needed
     if (this.history.length > this.config.maxHistoryEntries) {
       this.history = this.history.slice(-this.config.maxHistoryEntries)
     }
-    
+
     this.ctx.emit('cli-enhanced/history-added', entry)
   }
-  
+
   /** Get command history */
   getHistory(limit?: number): CliHistoryEntry[] {
     if (limit) {
@@ -222,29 +222,29 @@ export class CliEnhancedService extends Service {
     }
     return [...this.history]
   }
-  
+
   /** Clear command history */
   clearHistory(): void {
     this.history = []
     this.ctx.emit('cli-enhanced/history-cleared')
   }
-  
+
   /** Get auto-completion suggestions */
   getAutoCompletions(partial: string): string[] {
     if (!this.config.enableAutoCompletion) return []
-    
+
     const suggestions: string[] = []
     const partialLower = partial.toLowerCase()
-    
+
     for (const command of this.getCommands()) {
       if (command.name.toLowerCase().startsWith(partialLower)) {
         suggestions.push(command.name)
       }
     }
-    
+
     return suggestions.sort()
   }
-  
+
   /** Format output */
   formatOutput(data: unknown, format: OutputFormat): string {
     switch (format) {
@@ -272,13 +272,13 @@ export class CliEnhancedService extends Service {
         return String(data)
     }
   }
-  
+
   /** Update configuration */
   updateConfig(config: Partial<CliEnhancedConfig>): void {
     this.config = { ...this.config, ...config }
     this.ctx.emit('cli-enhanced/config-changed', this.config)
   }
-  
+
   /** Get configuration */
   getConfig(): CliEnhancedConfig {
     return { ...this.config }
@@ -323,12 +323,12 @@ export function createCliEnhancedPlugin(config: Config = {}): {
     apply(ctx) {
       const service = new CliEnhancedService(ctx)
       ctx.cliEnhanced = service
-      
+
       // Apply configuration
       if (Object.keys(config).length > 0) {
         service.updateConfig(config)
       }
-      
+
       // Register settings section
       ctx.effect(() => {
         const scope = ctx.settings.register(
@@ -366,14 +366,14 @@ export function createCliEnhancedPlugin(config: Config = {}): {
               enableAutoCompletion: true,
               sessionTimeoutMs: 3600000,
             },
-          }
+          },
         )
-        
+
         // Watch for settings changes
         scope.watch((next) => {
           service.updateConfig(next)
         })
-        
+
         return () => {
           // Cleanup
         }
@@ -398,14 +398,14 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'cli-enhanced/command-registered'(name: string): void
-    
+
     /**
      * Command unregistered.
      * @param name - command name.
      * @mode emit
      */
     'cli-enhanced/command-unregistered'(name: string): void
-    
+
     /**
      * Command executed.
      * @param name - command name.
@@ -414,20 +414,20 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'cli-enhanced/command-executed'(name: string, success: boolean, duration: number): void
-    
+
     /**
      * History added.
      * @param entry - history entry.
      * @mode emit
      */
     'cli-enhanced/history-added'(entry: CliHistoryEntry): void
-    
+
     /**
      * History cleared.
      * @mode emit
      */
     'cli-enhanced/history-cleared'(): void
-    
+
     /**
      * CLI enhanced configuration changed.
      * @param config - new configuration.

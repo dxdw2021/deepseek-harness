@@ -1,7 +1,7 @@
 /**
  * Desktop enhanced service for DeepSeek Harness.
  * Provides enhanced desktop features like theme management, notifications, and shortcuts.
- * 
+ *
  * @module @deepseek-ai/dsh-desktop-enhanced
  */
 
@@ -108,13 +108,13 @@ export interface DesktopEnhancedConfig {
 /** Desktop enhanced service definition */
 export class DesktopEnhancedService extends Service {
   static inject = ['settings']
-  
+
   /** Available themes */
   private themes: Map<string, Theme> = new Map()
-  
+
   /** Keyboard shortcuts */
   private shortcuts: Map<string, KeyboardShortcut> = new Map()
-  
+
   /** Configuration */
   private config: DesktopEnhancedConfig = {
     enabled: true,
@@ -125,14 +125,14 @@ export class DesktopEnhancedService extends Service {
     enableAutoStart: false,
     enableMinimizeToTray: true,
   }
-  
+
   constructor(ctx: Context) {
     super(ctx, 'desktopEnhanced')
-    
+
     // Register built-in themes
     this.registerBuiltinThemes()
   }
-  
+
   /** Register built-in themes */
   private registerBuiltinThemes(): void {
     const lightTheme: Theme = {
@@ -154,7 +154,7 @@ export class DesktopEnhancedService extends Service {
       },
       builtin: true,
     }
-    
+
     const darkTheme: Theme = {
       id: 'dark',
       name: 'Dark',
@@ -174,55 +174,55 @@ export class DesktopEnhancedService extends Service {
       },
       builtin: true,
     }
-    
+
     this.themes.set('light', lightTheme)
     this.themes.set('dark', darkTheme)
   }
-  
+
   /** Get current theme */
   getCurrentTheme(): Theme | undefined {
     return this.themes.get(this.config.themeId)
   }
-  
+
   /** Set current theme */
   setTheme(themeId: string): boolean {
     const theme = this.themes.get(themeId)
     if (!theme) return false
-    
+
     this.config.themeId = themeId
     this.ctx.emit('desktop-enhanced/theme-changed', theme)
-    
+
     return true
   }
-  
+
   /** Get all available themes */
   getThemes(): Theme[] {
     return Array.from(this.themes.values())
   }
-  
+
   /** Register a custom theme */
   registerTheme(theme: Theme): void {
     this.themes.set(theme.id, theme)
     this.ctx.emit('desktop-enhanced/theme-registered', theme)
   }
-  
+
   /** Remove a custom theme */
   removeTheme(themeId: string): boolean {
     const theme = this.themes.get(themeId)
     if (!theme || theme.builtin) return false
-    
+
     this.themes.delete(themeId)
     this.ctx.emit('desktop-enhanced/theme-removed', theme)
-    
+
     return true
   }
-  
+
   /** Show notification */
   showNotification(options: NotificationOptions): void {
     if (!this.config.enabled || !this.config.enableNotifications) return
-    
+
     this.ctx.emit('desktop-enhanced/notification-shown', options)
-    
+
     // Auto-close notification
     if (options.duration && options.duration > 0) {
       setTimeout(() => {
@@ -230,13 +230,13 @@ export class DesktopEnhancedService extends Service {
       }, options.duration)
     }
   }
-  
+
   /** Register keyboard shortcut */
   registerShortcut(shortcut: KeyboardShortcut): void {
     this.shortcuts.set(shortcut.id, shortcut)
     this.ctx.emit('desktop-enhanced/shortcut-registered', shortcut)
   }
-  
+
   /** Remove keyboard shortcut */
   removeShortcut(shortcutId: string): boolean {
     const removed = this.shortcuts.delete(shortcutId)
@@ -245,17 +245,17 @@ export class DesktopEnhancedService extends Service {
     }
     return removed
   }
-  
+
   /** Get all keyboard shortcuts */
   getShortcuts(): KeyboardShortcut[] {
     return Array.from(this.shortcuts.values())
   }
-  
+
   /** Execute keyboard shortcut */
   executeShortcut(shortcutId: string): boolean {
     const shortcut = this.shortcuts.get(shortcutId)
     if (!shortcut || !shortcut.enabled) return false
-    
+
     try {
       shortcut.action()
       this.ctx.emit('desktop-enhanced/shortcut-executed', shortcutId)
@@ -265,13 +265,13 @@ export class DesktopEnhancedService extends Service {
       return false
     }
   }
-  
+
   /** Update configuration */
   updateConfig(config: Partial<DesktopEnhancedConfig>): void {
     this.config = { ...this.config, ...config }
     this.ctx.emit('desktop-enhanced/config-changed', this.config)
   }
-  
+
   /** Get configuration */
   getConfig(): DesktopEnhancedConfig {
     return { ...this.config }
@@ -312,12 +312,12 @@ export function createDesktopEnhancedPlugin(config: Config = {}): {
     apply(ctx) {
       const service = new DesktopEnhancedService(ctx)
       ctx.desktopEnhanced = service
-      
+
       // Apply configuration
       if (Object.keys(config).length > 0) {
         service.updateConfig(config)
       }
-      
+
       // Register settings section
       ctx.effect(() => {
         const scope = ctx.settings.register(
@@ -341,14 +341,14 @@ export function createDesktopEnhancedPlugin(config: Config = {}): {
               enableAutoStart: false,
               enableMinimizeToTray: true,
             },
-          }
+          },
         )
-        
+
         // Watch for settings changes
         scope.watch((next) => {
           service.updateConfig(next)
         })
-        
+
         return () => {
           // Cleanup
         }
@@ -373,56 +373,56 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'desktop-enhanced/theme-changed'(theme: Theme): void
-    
+
     /**
      * Theme registered.
      * @param theme - registered theme.
      * @mode emit
      */
     'desktop-enhanced/theme-registered'(theme: Theme): void
-    
+
     /**
      * Theme removed.
      * @param theme - removed theme.
      * @mode emit
      */
     'desktop-enhanced/theme-removed'(theme: Theme): void
-    
+
     /**
      * Notification shown.
      * @param options - notification options.
      * @mode emit
      */
     'desktop-enhanced/notification-shown'(options: NotificationOptions): void
-    
+
     /**
      * Notification closed.
      * @param title - notification title.
      * @mode emit
      */
     'desktop-enhanced/notification-closed'(title: string): void
-    
+
     /**
      * Shortcut registered.
      * @param shortcut - registered shortcut.
      * @mode emit
      */
     'desktop-enhanced/shortcut-registered'(shortcut: KeyboardShortcut): void
-    
+
     /**
      * Shortcut removed.
      * @param shortcutId - removed shortcut ID.
      * @mode emit
      */
     'desktop-enhanced/shortcut-removed'(shortcutId: string): void
-    
+
     /**
      * Shortcut executed.
      * @param shortcutId - executed shortcut ID.
      * @mode emit
      */
     'desktop-enhanced/shortcut-executed'(shortcutId: string): void
-    
+
     /**
      * Shortcut error.
      * @param shortcutId - failed shortcut ID.
@@ -430,7 +430,7 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'desktop-enhanced/shortcut-error'(shortcutId: string, error: unknown): void
-    
+
     /**
      * Desktop enhanced configuration changed.
      * @param config - new configuration.

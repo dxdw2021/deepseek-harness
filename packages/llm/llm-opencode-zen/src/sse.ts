@@ -13,7 +13,7 @@
 
 /* jscpd:ignore-start */
 import { EventSourceParserStream } from 'eventsource-parser/stream'
-import { LlmError } from '@deepseek-ai/dsh-llm'
+import { LlmError, STREAM_CLOSED_CODE } from '@deepseek-ai/dsh-llm'
 
 /** The terminal payload OpenAI-compatible endpoints send after the last chunk. */
 export const DONE = '[DONE]'
@@ -37,6 +37,6 @@ export async function* parseSse(
     yield data
     if (data === DONE) return
   }
-  throw new LlmError('SSE stream ended without [DONE]', 'STREAM_CLOSED')
+  throw new LlmError('SSE stream ended without [DONE]', STREAM_CLOSED_CODE)
 }
 /* jscpd:ignore-end */

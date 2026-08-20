@@ -1,7 +1,7 @@
 /**
  * Example tools for DeepSeek Harness.
  * Demonstrates how to create and register tools using the tool registry.
- * 
+ *
  * @module @deepseek-ai/dsh-example-tools
  */
 
@@ -26,7 +26,7 @@ export const readFileTool: ToolDefinition = {
   },
   execute: async (args, context) => {
     const { path } = args as { path: string }
-    
+
     // In a real implementation, this would read the file
     // For now, return a mock result
     return {
@@ -63,7 +63,7 @@ export const writeFileTool: ToolDefinition = {
   },
   execute: async (args, context) => {
     const { path, content } = args as { path: string; content: string }
-    
+
     // In a real implementation, this would write the file
     // For now, return a mock result
     return {
@@ -101,7 +101,7 @@ export const bashTool: ToolDefinition = {
   },
   execute: async (args, context) => {
     const { command, timeout = 30000 } = args as { command: string; timeout?: number }
-    
+
     // In a real implementation, this would execute the command
     // For now, return a mock result
     return {
@@ -140,7 +140,7 @@ export const globTool: ToolDefinition = {
   },
   execute: async (args, context) => {
     const { pattern, path = '.' } = args as { pattern: string; path?: string }
-    
+
     // In a real implementation, this would search for files
     // For now, return a mock result
     return {
@@ -185,12 +185,12 @@ export const grepTool: ToolDefinition = {
     required: ['pattern'],
   },
   execute: async (args, context) => {
-    const { pattern, path = '.', include } = args as { 
-      pattern: string; 
-      path?: string; 
-      include?: string 
+    const { pattern, path = '.', include } = args as {
+      pattern: string
+      path?: string
+      include?: string
     }
-    
+
     // In a real implementation, this would search file contents
     // For now, return a mock result
     return {
@@ -240,7 +240,7 @@ export const lsTool: ToolDefinition = {
   },
   execute: async (args, context) => {
     const { path = '.', recursive = false } = args as { path?: string; recursive?: boolean }
-    
+
     // In a real implementation, this would list directory contents
     // For now, return a mock result
     return {
@@ -285,12 +285,12 @@ export const webFetchTool: ToolDefinition = {
     required: ['url'],
   },
   execute: async (args, context) => {
-    const { url, method = 'GET', headers = {} } = args as { 
-      url: string; 
-      method?: string; 
-      headers?: Record<string, string> 
+    const { url, method = 'GET', headers = {} } = args as {
+      url: string
+      method?: string
+      headers?: Record<string, string>
     }
-    
+
     // In a real implementation, this would fetch the URL
     // For now, return a mock result
     return {
@@ -332,7 +332,7 @@ export const todoWriteTool: ToolDefinition = {
   },
   execute: async (args, context) => {
     const { todos } = args as { todos: Array<{ content: string; status: string }> }
-    
+
     // In a real implementation, this would write the todo list
     // For now, return a mock result
     return {
@@ -361,7 +361,7 @@ export const exampleTools: ToolDefinition[] = [
 /** Register all example tools */
 export function registerExampleTools(ctx: Context): void {
   const toolRegistry = ctx.toolRegistry
-  
+
   for (const tool of exampleTools) {
     toolRegistry.register(tool)
   }

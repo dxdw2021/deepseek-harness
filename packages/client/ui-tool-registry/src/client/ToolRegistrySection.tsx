@@ -2,28 +2,20 @@
  * Tool Registry settings section.
  */
 
-import { useEffect } from 'react'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-web-react'
 import type { ToolRegistryState } from './store.ts'
 import type { ToolRegistryKey } from './locales.ts'
 
 export interface ToolRegistrySectionInjected {
-  hooks: { toolRegistry: SnapshotStore<ToolRegistryState> }
-  load: () => Promise<void>
-  setCategoryFilter: (cat: string) => void
-  setSearchQuery: (q: string) => void
+  useSnapshot: SnapshotSelectorHook<ToolRegistryState>
+  t: (key: ToolRegistryKey, params?: Record<string, string | number>) => string
 }
 
-export type ToolRegistrySectionProps =
-  PropsRuntime<'settings.section'>
-  & InjectFace<ToolRegistrySectionInjected>
-  & { t: (key: ToolRegistryKey, params?: Record<string, string | number>) => string; close: () => void }
+export type ToolRegistrySectionProps = Partial<ToolRegistrySectionInjected>
 
-export function ToolRegistrySection({ hooks, load, t, close }: ToolRegistrySectionProps): React.ReactElement {
-  const state = hooks.useToolRegistry(snapshot => snapshot)
-
-  useEffect(() => { void load() }, [load])
+export function ToolRegistrySection({ useSnapshot, t }: ToolRegistrySectionProps): React.ReactElement | null {
+  const state = useSnapshot?.(snapshot => snapshot)
+  if (!state || !t) return null
 
   if (state.status === 'loading') return <div>{t('status.loading')}</div>
   if (state.status === 'error') return <div>{t('status.error')}: {state.error}</div>
@@ -42,7 +34,6 @@ export function ToolRegistrySection({ hooks, load, t, close }: ToolRegistrySecti
           </div>
         ))
       }
-      <button onClick={close}>关闭</button>
     </div>
   )
 }

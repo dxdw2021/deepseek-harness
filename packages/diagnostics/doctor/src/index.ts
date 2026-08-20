@@ -1,7 +1,7 @@
 /**
  * Doctor service for DeepSeek Harness.
  * Provides diagnostic checks, crash reporting, and system health monitoring.
- * 
+ *
  * @module @deepseek-ai/dsh-doctor
  */
 
@@ -91,13 +91,13 @@ export interface DoctorConfig {
 /** Doctor service definition */
 export class DoctorService extends Service {
   static inject = ['settings']
-  
+
   /** Diagnostic checks */
   private checks: Map<string, () => Promise<DiagnosticCheck>> = new Map()
-  
+
   /** Crash reports */
   private crashReports: CrashReport[] = []
-  
+
   /** Configuration */
   private config: DoctorConfig = {
     enabled: true,
@@ -107,14 +107,14 @@ export class DoctorService extends Service {
     maxCrashReports: 100,
     enableSystemMonitoring: true,
   }
-  
+
   constructor(ctx: Context) {
     super(ctx, 'doctor')
-    
+
     // Register built-in checks
     this.registerBuiltinChecks()
   }
-  
+
   /** Register built-in diagnostic checks */
   private registerBuiltinChecks(): void {
     // Memory check
@@ -124,10 +124,10 @@ export class DoctorService extends Service {
       const totalMemory = memUsage.heapTotal
       const usedMemory = memUsage.heapUsed
       const usagePercent = (usedMemory / totalMemory) * 100
-      
+
       let status: CheckStatus = 'ok'
       let message = `Memory usage: ${Math.round(usagePercent)}%`
-      
+
       if (usagePercent > 90) {
         status = 'error'
         message += ' (Critical)'
@@ -135,7 +135,7 @@ export class DoctorService extends Service {
         status = 'warning'
         message += ' (High)'
       }
-      
+
       return {
         name: 'memory',
         description: 'Memory usage check',
@@ -150,17 +150,17 @@ export class DoctorService extends Service {
         duration: Date.now() - start,
       }
     })
-    
+
     // Node.js version check
     this.registerCheck('node-version', async () => {
       const start = Date.now()
       const nodeVersion = process.version
       const majorVersionStr = nodeVersion.slice(1).split('.')[0]
       const majorVersion = majorVersionStr ? parseInt(majorVersionStr) : 0
-      
+
       let status: CheckStatus = 'ok'
       let message = `Node.js version: ${nodeVersion}`
-      
+
       if (majorVersion < 18) {
         status = 'error'
         message += ' (Unsupported version)'
@@ -168,7 +168,7 @@ export class DoctorService extends Service {
         status = 'warning'
         message += ' (Older version recommended)'
       }
-      
+
       return {
         name: 'node-version',
         description: 'Node.js version check',
@@ -182,11 +182,11 @@ export class DoctorService extends Service {
         duration: Date.now() - start,
       }
     })
-    
+
     // Disk space check
     this.registerCheck('disk-space', async () => {
       const start = Date.now()
-      
+
       // In a real implementation, this would check actual disk space
       // For now, return a mock result
       return {
@@ -202,11 +202,11 @@ export class DoctorService extends Service {
         duration: Date.now() - start,
       }
     })
-    
+
     // Configuration check
     this.registerCheck('configuration', async () => {
       const start = Date.now()
-      
+
       // In a real implementation, this would validate configuration files
       // For now, return a mock result
       return {
@@ -222,13 +222,13 @@ export class DoctorService extends Service {
       }
     })
   }
-  
+
   /** Register a diagnostic check */
   registerCheck(name: string, checkFn: () => Promise<DiagnosticCheck>): void {
     this.checks.set(name, checkFn)
     this.ctx.emit('doctor/check-registered', name)
   }
-  
+
   /** Remove a diagnostic check */
   removeCheck(name: string): boolean {
     const removed = this.checks.delete(name)
@@ -237,12 +237,12 @@ export class DoctorService extends Service {
     }
     return removed
   }
-  
+
   /** Run a single diagnostic check */
   async runCheck(name: string): Promise<DiagnosticCheck | null> {
     const checkFn = this.checks.get(name)
     if (!checkFn) return null
-    
+
     try {
       const result = await checkFn()
       this.ctx.emit('doctor/check-completed', result)
@@ -260,27 +260,27 @@ export class DoctorService extends Service {
       return failedCheck
     }
   }
-  
+
   /** Run all diagnostic checks */
   async runAllChecks(): Promise<DiagnosticCheck[]> {
     const results: DiagnosticCheck[] = []
-    
+
     for (const name of this.checks.keys()) {
       const result = await this.runCheck(name)
       if (result) {
         results.push(result)
       }
     }
-    
+
     this.ctx.emit('doctor/all-checks-completed', results)
-    
+
     return results
   }
-  
+
   /** Get system information */
   getSystemInfo(): SystemInfo {
     const memUsage = process.memoryUsage()
-    
+
     return {
       platform: process.platform,
       platformVersion: String(process.release),
@@ -293,7 +293,7 @@ export class DoctorService extends Service {
       },
     }
   }
-  
+
   /** Report a crash */
   reportCrash(error: Error, userDescription?: string): CrashReport {
     const report: CrashReport = {
@@ -304,19 +304,19 @@ export class DoctorService extends Service {
       systemInfo: this.getSystemInfo(),
       userDescription,
     }
-    
+
     this.crashReports.push(report)
-    
+
     // Trim crash reports if needed
     if (this.crashReports.length > this.config.maxCrashReports) {
       this.crashReports = this.crashReports.slice(-this.config.maxCrashReports)
     }
-    
+
     this.ctx.emit('doctor/crash-reported', report)
-    
+
     return report
   }
-  
+
   /** Get crash reports */
   getCrashReports(limit?: number): CrashReport[] {
     if (limit) {
@@ -324,13 +324,13 @@ export class DoctorService extends Service {
     }
     return [...this.crashReports]
   }
-  
+
   /** Clear crash reports */
   clearCrashReports(): void {
     this.crashReports = []
     this.ctx.emit('doctor/crash-reports-cleared')
   }
-  
+
   /** Get health status */
   getHealthStatus(): { healthy: boolean; checks: DiagnosticCheck[] } {
     const checks = Array.from(this.checks.keys()).map(name => ({
@@ -341,18 +341,18 @@ export class DoctorService extends Service {
       timestamp: new Date(),
       duration: 0,
     }))
-    
+
     const healthy = checks.every(check => check.status === 'ok' || check.status === 'skipped')
-    
+
     return { healthy, checks }
   }
-  
+
   /** Update configuration */
   updateConfig(config: Partial<DoctorConfig>): void {
     this.config = { ...this.config, ...config }
     this.ctx.emit('doctor/config-changed', this.config)
   }
-  
+
   /** Get configuration */
   getConfig(): DoctorConfig {
     return { ...this.config }
@@ -391,12 +391,12 @@ export function createDoctorPlugin(config: Config = {}): {
     apply(ctx) {
       const service = new DoctorService(ctx)
       ctx.doctor = service
-      
+
       // Apply configuration
       if (Object.keys(config).length > 0) {
         service.updateConfig(config)
       }
-      
+
       // Register settings section
       ctx.effect(() => {
         const scope = ctx.settings.register(
@@ -418,21 +418,21 @@ export function createDoctorPlugin(config: Config = {}): {
               maxCrashReports: 100,
               enableSystemMonitoring: true,
             },
-          }
+          },
         )
-        
+
         // Watch for settings changes
         scope.watch((next) => {
           service.updateConfig(next)
         })
-        
+
         // Set up auto-check interval
         const checkInterval = setInterval(async () => {
           if (service.getConfig().enableAutoChecks) {
             await service.runAllChecks()
           }
         }, service.getConfig().autoCheckIntervalMs)
-        
+
         return () => {
           clearInterval(checkInterval)
         }
@@ -457,48 +457,48 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'doctor/check-registered'(name: string): void
-    
+
     /**
      * Check removed.
      * @param name - check name.
      * @mode emit
      */
     'doctor/check-removed'(name: string): void
-    
+
     /**
      * Check completed.
      * @param result - check result.
      * @mode emit
      */
     'doctor/check-completed'(result: DiagnosticCheck): void
-    
+
     /**
      * Check failed.
      * @param result - failed check result.
      * @mode emit
      */
     'doctor/check-failed'(result: DiagnosticCheck): void
-    
+
     /**
      * All checks completed.
      * @param results - all check results.
      * @mode emit
      */
     'doctor/all-checks-completed'(results: DiagnosticCheck[]): void
-    
+
     /**
      * Crash reported.
      * @param report - crash report.
      * @mode emit
      */
     'doctor/crash-reported'(report: CrashReport): void
-    
+
     /**
      * Crash reports cleared.
      * @mode emit
      */
     'doctor/crash-reports-cleared'(): void
-    
+
     /**
      * Doctor configuration changed.
      * @param config - new configuration.
