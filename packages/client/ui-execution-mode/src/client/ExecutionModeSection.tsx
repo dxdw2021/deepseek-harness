@@ -1,79 +1,47 @@
 /**
- * Execution Mode settings section — displays mode cards and configuration.
- *
- * @module ExecutionModeSection
+ * Execution Mode settings section.
  */
 
-import { useMemo } from 'react'
-import type { ExecutionModeController, ExecutionModeState, ExecutionMode } from './store.ts'
+import { useEffect } from 'react'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ExecutionModeState, ExecutionMode } from './store.ts'
 import type { ExecutionModeKey } from './locales.ts'
-import type { SettingsSectionOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
 
-/** Injected dependencies */
 export interface ExecutionModeSectionInjected {
-  controller: ExecutionModeController
-  useSnapshot: () => ExecutionModeState
-  t: (key: ExecutionModeKey) => string
+  hooks: { executionMode: SnapshotStore<ExecutionModeState> }
+  load: () => Promise<void>
+  setMode: (mode: ExecutionMode) => Promise<void>
 }
 
-/** Component props — owner props merged with injected */
-export type ExecutionModeSectionProps = SettingsSectionOwnerProps & ExecutionModeSectionInjected
+export type ExecutionModeSectionProps =
+  PropsRuntime<'settings.section'>
+  & InjectFace<ExecutionModeSectionInjected>
+  & { t: (key: ExecutionModeKey) => string; close: () => void }
 
-/**
- * Execution Mode settings section component.
- */
-export function ExecutionModeSection({ controller, useSnapshot, t, close }: ExecutionModeSectionProps): React.ReactElement {
-  const state = useSnapshot()
+export function ExecutionModeSection({ hooks, load, setMode, t, close }: ExecutionModeSectionProps): React.ReactElement {
+  const state = hooks.useExecutionMode(snapshot => snapshot)
 
-  const handleModeSwitch = (mode: ExecutionMode): void => {
-    void controller.setMode(mode)
-  }
+  useEffect(() => { void load() }, [load])
 
-  if (state.status === 'loading') {
-    return <div className="execution-mode-section loading">{t('status.loading')}</div>
-  }
-
-  if (state.status === 'error') {
-    return <div className="execution-mode-section error">{t('status.error')}: {state.error}</div>
-  }
-
-  const modes = ['light', 'balanced', 'delivery'] as const
+  if (state.status === 'loading') return <div>{t('status.loading')}</div>
+  if (state.status === 'error') return <div>{t('status.error')}: {state.error}</div>
 
   return (
-    <div className="execution-mode-section">
+    <div>
       <h2>{t('title')}</h2>
-      <p className="description">{t('description')}</p>
-
-      <div className="current-mode">
-        <span>{t('currentMode')}: </span>
-        <strong>{t(`mode.${state.currentMode}`)}</strong>
-      </div>
-
-      <div className="mode-cards">
-        {modes.map((mode) => (
-          <div key={mode} className={`mode-card ${state.currentMode === mode ? 'active' : ''}`}>
-            <h3>{t(`mode.${mode}`)}</h3>
-            <p>{t(`mode.${mode}.description`)}</p>
-            <div className="mode-config">
-              <span>{t('config.maxToolCalls')}: {state.configs[mode].maxToolCalls}</span>
-              <span>{t('config.enableStreaming')}: {state.configs[mode].enableStreaming ? '✓' : '✗'}</span>
-              <span>{t('config.enablePlanMode')}: {state.configs[mode].enablePlanMode ? '✓' : '✗'}</span>
-              <span>{t('config.enableGoalMode')}: {state.configs[mode].enableGoalMode ? '✓' : '✗'}</span>
-            </div>
-            <button
-              className="mode-switch-button"
-              onClick={() => handleModeSwitch(mode)}
-              disabled={!state.enableModeSwitching || state.currentMode === mode}
-            >
-              {state.currentMode === mode ? '当前模式' : t('actions.switch')}
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <div className="settings-footer">
-        <button className="close-button" onClick={close}>{t('actions.cancel')}</button>
-      </div>
+      <p>{t('description')}</p>
+      <div><span>{t('currentMode')}: </span><strong>{t(`mode.${state.currentMode}`)}</strong></div>
+      {(['light', 'balanced', 'delivery'] as const).map((mode) => (
+        <div key={mode}>
+          <h3>{t(`mode.${mode}`)}</h3>
+          <p>{t(`mode.${mode}.description`)}</p>
+          <button onClick={() => void setMode(mode)} disabled={state.currentMode === mode}>
+            {state.currentMode === mode ? '当前' : t('actions.switch')}
+          </button>
+        </div>
+      ))}
+      <button onClick={close}>{t('actions.cancel')}</button>
     </div>
   )
 }

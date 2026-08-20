@@ -1,46 +1,47 @@
 /**
  * Bot/IM Integration settings section.
- *
- * @module BotImSection
  */
 
-import type { BotImController, BotImState, PlatformType } from './store.ts'
+import { useEffect } from 'react'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { BotImState, PlatformType } from './store.ts'
 import type { BotImKey } from './locales.ts'
-import type { SettingsSectionOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
 
 export interface BotImSectionInjected {
-  controller: BotImController
-  useSnapshot: () => BotImState
-  t: (key: BotImKey) => string
+  hooks: { botIm: SnapshotStore<BotImState> }
+  load: () => Promise<void>
 }
 
-export type BotImSectionProps = SettingsSectionOwnerProps & BotImSectionInjected
+export type BotImSectionProps =
+  PropsRuntime<'settings.section'>
+  & InjectFace<BotImSectionInjected>
+  & { t: (key: BotImKey) => string; close: () => void }
 
 const PLATFORMS: PlatformType[] = ['feishu', 'lark', 'wechat', 'qq', 'telegram', 'slack', 'discord']
 
-export function BotImSection({ useSnapshot, t, close }: BotImSectionProps): React.ReactElement {
-  const state = useSnapshot()
+export function BotImSection({ hooks, load, t, close }: BotImSectionProps): React.ReactElement {
+  const state = hooks.useBotIm(snapshot => snapshot)
 
-  if (state.status === 'loading') return <div className="loading">{t('status.loading')}</div>
-  if (state.status === 'error') return <div className="error">{t('status.error')}: {state.error}</div>
+  useEffect(() => { void load() }, [load])
+
+  if (state.status === 'loading') return <div>{t('status.loading')}</div>
+  if (state.status === 'error') return <div>{t('status.error')}: {state.error}</div>
 
   return (
-    <div className="bot-im-section">
+    <div>
       <h2>{t('title')}</h2>
       <p>{t('description')}</p>
-      <div className="platforms-list">
-        {PLATFORMS.map((pt) => {
-          const platform = state.platforms.find(p => p.type === pt)
-          if (!platform) return null
-          return (
-            <div key={pt} className={`platform-card ${platform.enabled ? 'enabled' : 'disabled'}`}>
-              <h3>{t(`platform.${pt}`)}</h3>
-              <span>{platform.connected ? t('platform.connected') : t('platform.disconnected')}</span>
-              <input type="text" placeholder={t('config.appId')} value={platform.appId} readOnly />
-            </div>
-          )
-        })}
-      </div>
+      {PLATFORMS.map((pt) => {
+        const platform = state.platforms.find(p => p.type === pt)
+        if (!platform) return null
+        return (
+          <div key={pt}>
+            <h3>{t(`platform.${pt}`)}</h3>
+            <span>{platform.connected ? t('platform.connected') : t('platform.disconnected')}</span>
+          </div>
+        )
+      })}
       <button onClick={close}>关闭</button>
     </div>
   )

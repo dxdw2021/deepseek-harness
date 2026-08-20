@@ -1,11 +1,8 @@
 /**
  * Permission Management UI plugin, browser half.
- *
- * Export discipline: packages/client/AGENTS.md.
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
-import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -28,14 +25,17 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-permission-management: copy dictionaries')
   const connection = ctx.get('connection') as ConnectionHandle
   const controller = new PermissionManagementController(connection.api)
-  const useSnapshot = bindSnapshotSelector(controller.store)
-  const t = ctx.locale.bind(NS) as PermissionManagementSectionInjected['t']
-  const injected = (): PermissionManagementSectionInjected => ({ controller, useSnapshot, t })
+  const load = (): Promise<void> => controller.load()
+  const t = ctx.locale.bind(NS) as PermissionManagementSectionInjected['t'] & ((key: PermissionManagementKey, params?: Record<string, string | number>) => string)
+  const injected = (): PermissionManagementSectionInjected => ({
+    hooks: { permissionManagement: controller.store },
+    load,
+  })
 
   ctx.effect(() => {
     const refresh = (): void => { refreshIfLoaded(controller) }
     const disposers = [
-      ctx.remote.$on('settings/document-updated', (ns) => { if (ns === 'permission-management') refresh() }),
+      ctx.remote.$on('settings/document-updated', (ns: string) => { if (ns === 'permission-management') refresh() }),
       ctx.on('connection/reset', refresh),
     ]
     return () => { for (const dispose of disposers) dispose() }

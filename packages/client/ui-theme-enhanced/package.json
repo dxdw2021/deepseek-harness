@@ -44,10 +44,12 @@
     "@deepseek-ai/dsh-client-locale": "workspace:^",
     "@deepseek-ai/dsh-api-remotes": "workspace:^",
     "@deepseek-ai/dsh-client-web-react": "workspace:^",
-    "@deepseek-ai/dsh-desktop-enhanced": "workspace:^"
+    "@deepseek-ai/dsh-desktop-enhanced": "workspace:^",
+    "react": "^18.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
+    "@types/react": "~18.3.1",
     "typescript": "^6.0.3",
     "tsdown": "^0.12.4"
   }
