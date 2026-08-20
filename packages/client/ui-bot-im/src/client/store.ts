@@ -1,180 +1,73 @@
 /**
- * Bot/IM Integration settings store — manages the bot/IM configuration state
- * and communicates with the Host through the settings API.
+ * Bot/IM Integration settings store — uses createSnapshotStore from runtime.
  *
  * @module store
  */
+import type { IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 
-/** Platform types */
 export type PlatformType = 'feishu' | 'lark' | 'wechat' | 'qq' | 'telegram' | 'slack' | 'discord'
 
-/** Platform configuration */
 export interface PlatformConfig {
   type: PlatformType
   enabled: boolean
   appId: string
-  appSecret: string
-  verificationToken?: string
-  webhookUrl?: string
-  botName?: string
   connected: boolean
-  lastConnected?: Date
 }
 
-/** Bot/IM state */
 export interface BotImState {
-  /** Current status */
   status: 'idle' | 'loading' | 'error'
-  /** Platform configurations */
   platforms: PlatformConfig[]
-  /** Global bot settings */
   commandPrefix: string
   enableAutoReply: boolean
-  autoReplyMessage: string
-  /** Error message if failed */
-  error?: string
+  error: string | null
 }
 
-/** API interface for settings operations */
-export interface SettingsApi {
-  /** Read settings namespace */
-  read(namespace: string): Promise<Record<string, unknown>>
-  /** Write settings namespace */
-  write(namespace: string, data: Record<string, unknown>): Promise<void>
-}
-
-/**
- * Bot/IM store — manages configuration state and settings operations.
- */
-export class BotImStore {
-  /** Store state */
-  private _state: BotImState = {
+export class BotImController {
+  readonly store: SnapshotStore<BotImState> = createSnapshotStore<BotImState>({
     status: 'idle',
     platforms: [
-      { type: 'feishu', enabled: false, appId: '', appSecret: '', connected: false },
-      { type: 'lark', enabled: false, appId: '', appSecret: '', connected: false },
-      { type: 'wechat', enabled: false, appId: '', appSecret: '', connected: false },
-      { type: 'qq', enabled: false, appId: '', appSecret: '', connected: false },
-      { type: 'telegram', enabled: false, appId: '', appSecret: '', connected: false },
-      { type: 'slack', enabled: false, appId: '', appSecret: '', connected: false },
-      { type: 'discord', enabled: false, appId: '', appSecret: '', connected: false },
+      { type: 'feishu', enabled: false, appId: '', connected: false },
+      { type: 'lark', enabled: false, appId: '', connected: false },
+      { type: 'wechat', enabled: false, appId: '', connected: false },
+      { type: 'qq', enabled: false, appId: '', connected: false },
+      { type: 'telegram', enabled: false, appId: '', connected: false },
+      { type: 'slack', enabled: false, appId: '', connected: false },
+      { type: 'discord', enabled: false, appId: '', connected: false },
     ],
     commandPrefix: '/',
     enableAutoReply: true,
-    autoReplyMessage: 'I am currently busy, please try again later.',
-  }
-  
-  /** Listeners */
-  private _listeners = new Set<() => void>()
-  
-  /** API reference */
-  private _api: SettingsApi
-  
-  constructor(api: SettingsApi) {
-    this._api = api
-  }
-  
-  /** Get current snapshot */
-  getSnapshot(): BotImState {
-    return this._state
-  }
-  
-  /** Subscribe to changes */
-  subscribe(listener: () => void): () => void {
-    this._listeners.add(listener)
-    return () => { this._listeners.delete(listener) }
-  }
-  
-  /** Notify listeners */
-  private _notify(): void {
-    for (const listener of this._listeners) listener()
-  }
-  
-  /** Load settings from Host */
+    error: null,
+  })
+  private generation = 0
+  constructor(private readonly api: Pick<IApiClient, 'settings'>) {}
+
   async load(): Promise<void> {
-    this._state = { ...this._state, status: 'loading' }
-    this._notify()
-    
+    const generation = ++this.generation
+    this.store.update((s) => { s.status = 'loading'; s.error = null })
     try {
-      const data = await this._api.read('bot-im')
-      this._state = {
-        ...this._state,
-        status: 'idle',
-        platforms: (data.platforms as PlatformConfig[]) || this._state.platforms,
-        commandPrefix: (data.commandPrefix as string) || '/',
-        enableAutoReply: (data.enableAutoReply as boolean) ?? true,
-        autoReplyMessage: (data.autoReplyMessage as string) || this._state.autoReplyMessage,
-      }
-    } catch (error) {
-      this._state = {
-        ...this._state,
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Failed to load bot/IM settings',
-      }
-    }
-    this._notify()
-  }
-  
-  /** Toggle platform enabled state */
-  async togglePlatform(platformType: PlatformType, enabled: boolean): Promise<void> {
-    const previousPlatforms = this._state.platforms
-    this._state = {
-      ...this._state,
-      platforms: this._state.platforms.map(platform =>
-        platform.type === platformType ? { ...platform, enabled } : platform
-      ),
-    }
-    this._notify()
-    
-    try {
-      await this._api.write('bot-im', { platforms: this._state.platforms })
-    } catch (error) {
-      this._state = { ...this._state, platforms: previousPlatforms }
-      this._notify()
-      throw error
-    }
-  }
-  
-  /** Update platform configuration */
-  async updatePlatformConfig(platformType: PlatformType, config: Partial<PlatformConfig>): Promise<void> {
-    const previousPlatforms = this._state.platforms
-    this._state = {
-      ...this._state,
-      platforms: this._state.platforms.map(platform =>
-        platform.type === platformType ? { ...platform, ...config } : platform
-      ),
-    }
-    this._notify()
-    
-    try {
-      await this._api.write('bot-im', { platforms: this._state.platforms })
-    } catch (error) {
-      this._state = { ...this._state, platforms: previousPlatforms }
-      this._notify()
-      throw error
-    }
-  }
-  
-  /** Update global bot settings */
-  async updateGlobalSettings(settings: Partial<Pick<BotImState, 'commandPrefix' | 'enableAutoReply' | 'autoReplyMessage'>>): Promise<void> {
-    const previous = {
-      commandPrefix: this._state.commandPrefix,
-      enableAutoReply: this._state.enableAutoReply,
-      autoReplyMessage: this._state.autoReplyMessage,
-    }
-    this._state = { ...this._state, ...settings }
-    this._notify()
-    
-    try {
-      await this._api.write('bot-im', {
-        commandPrefix: this._state.commandPrefix,
-        enableAutoReply: this._state.enableAutoReply,
-        autoReplyMessage: this._state.autoReplyMessage,
+      const response = await this.api.settings.describe({})
+      if (!response.result.ok) throw new Error(response.result.error.message)
+      if (generation !== this.generation) return
+      const view = response.result.value.namespaces.find(e => e.ns === 'bot-im')
+      if (view === undefined) { this.store.update((s) => { s.status = 'idle' }); return }
+      const value = view.value as Record<string, unknown> | null
+      this.store.update((s) => {
+        s.status = 'idle'
+        s.platforms = (value?.platforms as PlatformConfig[]) ?? s.platforms
+        s.commandPrefix = (value?.commandPrefix as string) ?? '/'
+        s.enableAutoReply = (value?.enableAutoReply as boolean) ?? true
       })
     } catch (error) {
-      this._state = { ...this._state, ...previous }
-      this._notify()
-      throw error
+      if (generation !== this.generation) return
+      this.store.update((s) => { s.status = 'error'; s.error = error instanceof Error ? error.message : String(error) })
     }
   }
+
+  dispose(): void { this.generation += 1 }
+}
+
+export function refreshIfLoaded(controller: BotImController): void {
+  if (controller.store.getSnapshot().status === 'idle') return
+  void controller.load()
 }

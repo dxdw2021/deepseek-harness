@@ -4,168 +4,62 @@
  * @module ExecutionModeSection
  */
 
-import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
-import type { ExecutionModeStore, ExecutionModeState, ExecutionMode, ModeConfig } from './store.ts'
+import { useMemo } from 'react'
+import type { ExecutionModeController, ExecutionModeState, ExecutionMode } from './store.ts'
 import type { ExecutionModeKey } from './locales.ts'
+import type { SettingsSectionOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
 
 /** Injected dependencies */
 export interface ExecutionModeSectionInjected {
-  /** Store controller */
-  controller: ExecutionModeStore
-  /** Snapshot selector hook */
+  controller: ExecutionModeController
   useSnapshot: () => ExecutionModeState
-  /** API connection */
-  api: ConnectionHandle['api']
-  /** Translation function */
   t: (key: ExecutionModeKey) => string
 }
 
-/** Component props */
-export interface ExecutionModeSectionProps {
-  /** Injected dependencies */
-  injected: ExecutionModeSectionInjected
-  /** Close settings panel */
-  close: () => void
-}
+/** Component props — owner props merged with injected */
+export type ExecutionModeSectionProps = SettingsSectionOwnerProps & ExecutionModeSectionInjected
 
 /**
  * Execution Mode settings section component.
  */
-export function ExecutionModeSection({ injected, close }: ExecutionModeSectionProps): React.ReactElement {
-  const { controller, useSnapshot, t } = injected
+export function ExecutionModeSection({ controller, useSnapshot, t, close }: ExecutionModeSectionProps): React.ReactElement {
   const state = useSnapshot()
-  
-  const handleModeSwitch = async (mode: ExecutionMode): Promise<void> => {
-    try {
-      await controller.setMode(mode)
-    } catch (error) {
-      console.error('Failed to switch mode:', error)
-    }
+
+  const handleModeSwitch = (mode: ExecutionMode): void => {
+    void controller.setMode(mode)
   }
-  
-  const handleConfigUpdate = async (mode: ExecutionMode, config: Partial<ModeConfig>): Promise<void> => {
-    try {
-      await controller.updateConfig(mode, config)
-    } catch (error) {
-      console.error('Failed to update config:', error)
-    }
-  }
-  
-  const handleToggleSwitching = async (enabled: boolean): Promise<void> => {
-    try {
-      await controller.toggleModeSwitching(enabled)
-    } catch (error) {
-      console.error('Failed to toggle mode switching:', error)
-    }
-  }
-  
+
   if (state.status === 'loading') {
     return <div className="execution-mode-section loading">{t('status.loading')}</div>
   }
-  
+
   if (state.status === 'error') {
     return <div className="execution-mode-section error">{t('status.error')}: {state.error}</div>
   }
-  
+
+  const modes = ['light', 'balanced', 'delivery'] as const
+
   return (
     <div className="execution-mode-section">
       <h2>{t('title')}</h2>
       <p className="description">{t('description')}</p>
-      
+
       <div className="current-mode">
-        <label>{t('currentMode')}:</label>
-        <span className={`mode-badge ${state.currentMode}`}>
-          {t(`mode.${state.currentMode}`)}
-        </span>
+        <span>{t('currentMode')}: </span>
+        <strong>{t(`mode.${state.currentMode}`)}</strong>
       </div>
-      
+
       <div className="mode-cards">
-        {(['light', 'balanced', 'delivery'] as ExecutionMode[]).map((mode) => (
-          <div
-            key={mode}
-            className={`mode-card ${state.currentMode === mode ? 'active' : ''}`}
-          >
+        {modes.map((mode) => (
+          <div key={mode} className={`mode-card ${state.currentMode === mode ? 'active' : ''}`}>
             <h3>{t(`mode.${mode}`)}</h3>
             <p>{t(`mode.${mode}.description`)}</p>
-            
             <div className="mode-config">
-              <div className="config-item">
-                <label>{t('config.maxToolCalls')}:</label>
-                <input
-                  type="number"
-                  value={state.configs[mode].maxToolCalls}
-                  onChange={(e) => handleConfigUpdate(mode, { maxToolCalls: parseInt(e.target.value) || 0 })}
-                  disabled={!state.enableModeSwitching}
-                />
-              </div>
-              
-              <div className="config-item">
-                <label>{t('config.enableStreaming')}</label>
-                <input
-                  type="checkbox"
-                  checked={state.configs[mode].enableStreaming}
-                  onChange={(e) => handleConfigUpdate(mode, { enableStreaming: e.target.checked })}
-                  disabled={!state.enableModeSwitching}
-                />
-              </div>
-              
-              <div className="config-item">
-                <label>{t('config.enablePlanMode')}</label>
-                <input
-                  type="checkbox"
-                  checked={state.configs[mode].enablePlanMode}
-                  onChange={(e) => handleConfigUpdate(mode, { enablePlanMode: e.target.checked })}
-                  disabled={!state.enableModeSwitching}
-                />
-              </div>
-              
-              <div className="config-item">
-                <label>{t('config.enableGoalMode')}</label>
-                <input
-                  type="checkbox"
-                  checked={state.configs[mode].enableGoalMode}
-                  onChange={(e) => handleConfigUpdate(mode, { enableGoalMode: e.target.checked })}
-                  disabled={!state.enableModeSwitching}
-                />
-              </div>
-              
-              {mode !== 'light' && (
-                <div className="config-item">
-                  <label>{t('config.enableSubagents')}</label>
-                  <input
-                    type="checkbox"
-                    checked={state.configs[mode].enableSubagents ?? false}
-                    onChange={(e) => handleConfigUpdate(mode, { enableSubagents: e.target.checked })}
-                    disabled={!state.enableModeSwitching}
-                  />
-                </div>
-              )}
-              
-              {mode === 'delivery' && (
-                <>
-                  <div className="config-item">
-                    <label>{t('config.enableEvidenceCollection')}</label>
-                    <input
-                      type="checkbox"
-                      checked={state.configs[mode].enableEvidenceCollection ?? false}
-                      onChange={(e) => handleConfigUpdate(mode, { enableEvidenceCollection: e.target.checked })}
-                      disabled={!state.enableModeSwitching}
-                    />
-                  </div>
-                  
-                  <div className="config-item">
-                    <label>{t('config.enableStrictValidation')}</label>
-                    <input
-                      type="checkbox"
-                      checked={state.configs[mode].enableStrictValidation ?? false}
-                      onChange={(e) => handleConfigUpdate(mode, { enableStrictValidation: e.target.checked })}
-                      disabled={!state.enableModeSwitching}
-                    />
-                  </div>
-                </>
-              )}
+              <span>{t('config.maxToolCalls')}: {state.configs[mode].maxToolCalls}</span>
+              <span>{t('config.enableStreaming')}: {state.configs[mode].enableStreaming ? '✓' : '✗'}</span>
+              <span>{t('config.enablePlanMode')}: {state.configs[mode].enablePlanMode ? '✓' : '✗'}</span>
+              <span>{t('config.enableGoalMode')}: {state.configs[mode].enableGoalMode ? '✓' : '✗'}</span>
             </div>
-            
             <button
               className="mode-switch-button"
               onClick={() => handleModeSwitch(mode)}
@@ -176,20 +70,9 @@ export function ExecutionModeSection({ injected, close }: ExecutionModeSectionPr
           </div>
         ))}
       </div>
-      
+
       <div className="settings-footer">
-        <div className="toggle-switching">
-          <label>{t('config.enableModeSwitching')}</label>
-          <input
-            type="checkbox"
-            checked={state.enableModeSwitching}
-            onChange={(e) => handleToggleSwitching(e.target.checked)}
-          />
-        </div>
-        
-        <button className="close-button" onClick={close}>
-          {t('actions.cancel')}
-        </button>
+        <button className="close-button" onClick={close}>{t('actions.cancel')}</button>
       </div>
     </div>
   )

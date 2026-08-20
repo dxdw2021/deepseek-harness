@@ -1,9 +1,10 @@
 /**
- * Execution Mode settings store — manages the execution mode state
- * and communicates with the Host through the settings API.
+ * Execution Mode settings store — uses createSnapshotStore from runtime.
  *
  * @module store
  */
+import type { IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 
 /** Execution mode types */
 export type ExecutionMode = 'light' | 'balanced' | 'delivery'
@@ -21,32 +22,19 @@ export interface ModeConfig {
 
 /** Execution mode settings state */
 export interface ExecutionModeState {
-  /** Current status */
   status: 'idle' | 'loading' | 'error'
-  /** Current execution mode */
   currentMode: ExecutionMode
-  /** Mode configurations */
   configs: Record<ExecutionMode, ModeConfig>
-  /** Whether mode switching is enabled */
   enableModeSwitching: boolean
-  /** Error message if failed */
-  error?: string
-}
-
-/** API interface for settings operations */
-export interface SettingsApi {
-  /** Read settings namespace */
-  read(namespace: string): Promise<Record<string, unknown>>
-  /** Write settings namespace */
-  write(namespace: string, data: Record<string, unknown>): Promise<void>
+  error: string | null
 }
 
 /**
- * Execution Mode store — manages mode state and settings operations.
+ * Execution Mode controller — manages mode state and settings operations.
  */
-export class ExecutionModeStore {
-  /** Store state */
-  private _state: ExecutionModeState = {
+export class ExecutionModeController {
+  /** Row snapshot consumed through a bound selector hook. */
+  readonly store: SnapshotStore<ExecutionModeState> = createSnapshotStore<ExecutionModeState>({
     status: 'idle',
     currentMode: 'balanced',
     configs: {
@@ -55,108 +43,76 @@ export class ExecutionModeStore {
       delivery: { maxToolCalls: 20, enableStreaming: true, enablePlanMode: true, enableGoalMode: true, enableSubagents: true, enableEvidenceCollection: true, enableStrictValidation: true },
     },
     enableModeSwitching: true,
-  }
-  
-  /** Listeners */
-  private _listeners = new Set<() => void>()
-  
-  /** API reference */
-  private _api: SettingsApi
-  
-  constructor(api: SettingsApi) {
-    this._api = api
-  }
-  
-  /** Get current snapshot */
-  getSnapshot(): ExecutionModeState {
-    return this._state
-  }
-  
-  /** Subscribe to changes */
-  subscribe(listener: () => void): () => void {
-    this._listeners.add(listener)
-    return () => { this._listeners.delete(listener) }
-  }
-  
-  /** Notify listeners */
-  private _notify(): void {
-    for (const listener of this._listeners) listener()
-  }
-  
-  /** Load settings from Host */
+    error: null,
+  })
+
+  private generation = 0
+
+  constructor(private readonly api: Pick<IApiClient, 'settings'>) {}
+
+  /** Load settings from Host. */
   async load(): Promise<void> {
-    this._state = { ...this._state, status: 'loading' }
-    this._notify()
-    
+    const generation = ++this.generation
+    this.store.update((state) => {
+      state.status = 'loading'
+      state.error = null
+    })
     try {
-      const data = await this._api.read('execution-mode')
-      this._state = {
-        ...this._state,
-        status: 'idle',
-        currentMode: (data.currentMode as ExecutionMode) || 'balanced',
-        configs: (data.configs as Record<ExecutionMode, ModeConfig>) || this._state.configs,
-        enableModeSwitching: (data.enableModeSwitching as boolean) ?? true,
+      const response = await this.api.settings.describe({})
+      if (!response.result.ok) throw new Error(response.result.error.message)
+      if (generation !== this.generation) return
+      const view = response.result.value.namespaces.find(entry => entry.ns === 'execution-mode')
+      if (view === undefined) {
+        this.store.update((state) => { state.status = 'idle' })
+        return
       }
+      const value = view.value as Record<string, unknown> | null
+      this.store.update((state) => {
+        state.status = 'idle'
+        state.currentMode = (value?.currentMode as ExecutionMode) || 'balanced'
+        state.enableModeSwitching = (value?.enableModeSwitching as boolean) ?? true
+      })
     } catch (error) {
-      this._state = {
-        ...this._state,
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Failed to load execution mode settings',
-      }
+      if (generation !== this.generation) return
+      this.store.update((state) => {
+        state.status = 'error'
+        state.error = error instanceof Error ? error.message : String(error)
+      })
     }
-    this._notify()
   }
-  
-  /** Switch execution mode */
+
+  /** Switch execution mode. */
   async setMode(mode: ExecutionMode): Promise<void> {
-    const previousMode = this._state.currentMode
-    this._state = { ...this._state, currentMode: mode }
-    this._notify()
-    
+    const generation = ++this.generation
+    this.store.update((state) => { state.currentMode = mode })
     try {
-      await this._api.write('execution-mode', { currentMode: mode })
+      const view = (await this.api.settings.describe({})).result.value
+      const ns = view.namespaces.find(e => e.ns === 'execution-mode')
+      if (ns === undefined) return
+      const response = await this.api.settings.mutate({
+        ns: 'execution-mode',
+        ops: [{ op: 'set', path: ['currentMode'], value: mode }],
+        expectedRevision: ns.revision,
+      })
+      if (generation !== this.generation) return
+      if (!response.result.ok) throw new Error(response.result.error.message)
     } catch (error) {
-      // Revert on failure
-      this._state = { ...this._state, currentMode: previousMode }
-      this._notify()
-      throw error
+      if (generation !== this.generation) return
+      this.load()
     }
   }
-  
-  /** Update mode configuration */
-  async updateConfig(mode: ExecutionMode, config: Partial<ModeConfig>): Promise<void> {
-    const previousConfigs = this._state.configs
-    this._state = {
-      ...this._state,
-      configs: {
-        ...this._state.configs,
-        [mode]: { ...this._state.configs[mode], ...config },
-      },
-    }
-    this._notify()
-    
-    try {
-      await this._api.write('execution-mode', { configs: this._state.configs })
-    } catch (error) {
-      // Revert on failure
-      this._state = { ...this._state, configs: previousConfigs }
-      this._notify()
-      throw error
-    }
+
+  /** Stop in-flight responses from publishing after plugin disposal. */
+  dispose(): void {
+    this.generation += 1
   }
-  
-  /** Toggle mode switching */
-  async toggleModeSwitching(enabled: boolean): Promise<void> {
-    const previous = this._state.enableModeSwitching
-    this._state = { ...this._state, enableModeSwitching: enabled }
-    this._notify()
-    
-    try {
-      await this._api.write('execution-mode', { enableModeSwitching: enabled })
-    } catch (error) {
-      this._state = { ...this._state, enableModeSwitching: previous }
-      this._notify()
-      throw error
-    }
-  }
+}
+
+/**
+ * Refetch only after the row has opened once.
+ * @param controller - execution mode controller.
+ */
+export function refreshIfLoaded(controller: ExecutionModeController): void {
+  if (controller.store.getSnapshot().status === 'idle') return
+  void controller.load()
 }

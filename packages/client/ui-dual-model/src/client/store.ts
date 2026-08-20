@@ -1,11 +1,12 @@
 /**
- * Dual Model settings store — manages the dual model configuration state
- * and communicates with the Host through the settings API.
+ * Dual Model settings store — uses createSnapshotStore from runtime.
  *
  * @module store
  */
+import type { IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 
-/** Model roles in dual model collaboration */
+/** Model roles */
 export type ModelRole = 'executor' | 'planner'
 
 /** Model configuration */
@@ -17,46 +18,25 @@ export interface ModelConfig {
 }
 
 /** Collaboration strategies */
-export type CollaborationStrategy =
-  | 'sequential'
-  | 'parallel'
-  | 'iterative'
-  | 'adaptive'
+export type CollaborationStrategy = 'sequential' | 'parallel' | 'iterative' | 'adaptive'
 
-/** Dual model configuration state */
+/** Dual model state */
 export interface DualModelState {
-  /** Current status */
   status: 'idle' | 'loading' | 'error'
-  /** Whether dual model is enabled */
   enabled: boolean
-  /** Executor model configuration */
   executor: ModelConfig
-  /** Planner model configuration */
   planner: ModelConfig
-  /** Collaboration strategy */
   strategy: CollaborationStrategy
-  /** Available providers */
   availableProviders: string[]
-  /** Available models per provider */
   availableModels: Record<string, string[]>
-  /** Error message if failed */
-  error?: string
-}
-
-/** API interface for settings operations */
-export interface SettingsApi {
-  /** Read settings namespace */
-  read(namespace: string): Promise<Record<string, unknown>>
-  /** Write settings namespace */
-  write(namespace: string, data: Record<string, unknown>): Promise<void>
+  error: string | null
 }
 
 /**
- * Dual Model store — manages configuration state and settings operations.
+ * Dual Model controller — manages configuration state.
  */
-export class DualModelStore {
-  /** Store state */
-  private _state: DualModelState = {
+export class DualModelController {
+  readonly store: SnapshotStore<DualModelState> = createSnapshotStore<DualModelState>({
     status: 'idle',
     enabled: false,
     executor: { provider: 'deepseek', model: 'deepseek-chat' },
@@ -68,116 +48,48 @@ export class DualModelStore {
       openai: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
       anthropic: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
     },
-  }
-  
-  /** Listeners */
-  private _listeners = new Set<() => void>()
-  
-  /** API reference */
-  private _api: SettingsApi
-  
-  constructor(api: SettingsApi) {
-    this._api = api
-  }
-  
-  /** Get current snapshot */
-  getSnapshot(): DualModelState {
-    return this._state
-  }
-  
-  /** Subscribe to changes */
-  subscribe(listener: () => void): () => void {
-    this._listeners.add(listener)
-    return () => { this._listeners.delete(listener) }
-  }
-  
-  /** Notify listeners */
-  private _notify(): void {
-    for (const listener of this._listeners) listener()
-  }
-  
-  /** Load settings from Host */
+    error: null,
+  })
+
+  private generation = 0
+
+  constructor(private readonly api: Pick<IApiClient, 'settings'>) {}
+
   async load(): Promise<void> {
-    this._state = { ...this._state, status: 'loading' }
-    this._notify()
-    
+    const generation = ++this.generation
+    this.store.update((state) => { state.status = 'loading'; state.error = null })
     try {
-      const data = await this._api.read('dual-model')
-      this._state = {
-        ...this._state,
-        status: 'idle',
-        enabled: (data.enabled as boolean) ?? false,
-        executor: (data.executor as ModelConfig) ?? this._state.executor,
-        planner: (data.planner as ModelConfig) ?? this._state.planner,
-        strategy: (data.strategy as CollaborationStrategy) ?? 'sequential',
-      }
+      const response = await this.api.settings.describe({})
+      if (!response.result.ok) throw new Error(response.result.error.message)
+      if (generation !== this.generation) return
+      const view = response.result.value.namespaces.find(entry => entry.ns === 'dual-model')
+      if (view === undefined) { this.store.update((s) => { s.status = 'idle' }); return }
+      const value = view.value as Record<string, unknown> | null
+      this.store.update((state) => {
+        state.status = 'idle'
+        state.enabled = (value?.enabled as boolean) ?? false
+        state.executor = (value?.executor as ModelConfig) ?? state.executor
+        state.planner = (value?.planner as ModelConfig) ?? state.planner
+        state.strategy = (value?.strategy as CollaborationStrategy) ?? 'sequential'
+      })
     } catch (error) {
-      this._state = {
-        ...this._state,
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Failed to load dual model settings',
-      }
+      if (generation !== this.generation) return
+      this.store.update((s) => { s.status = 'error'; s.error = error instanceof Error ? error.message : String(error) })
     }
-    this._notify()
   }
-  
-  /** Toggle dual model enabled state */
+
   async toggleEnabled(enabled: boolean): Promise<void> {
-    const previous = this._state.enabled
-    this._state = { ...this._state, enabled }
-    this._notify()
-    
-    try {
-      await this._api.write('dual-model', { enabled })
-    } catch (error) {
-      this._state = { ...this._state, enabled: previous }
-      this._notify()
-      throw error
-    }
+    this.store.update((s) => { s.enabled = enabled })
   }
-  
-  /** Update executor model configuration */
-  async updateExecutor(config: Partial<ModelConfig>): Promise<void> {
-    const previous = this._state.executor
-    this._state = { ...this._state, executor: { ...this._state.executor, ...config } }
-    this._notify()
-    
-    try {
-      await this._api.write('dual-model', { executor: this._state.executor })
-    } catch (error) {
-      this._state = { ...this._state, executor: previous }
-      this._notify()
-      throw error
-    }
-  }
-  
-  /** Update planner model configuration */
-  async updatePlanner(config: Partial<ModelConfig>): Promise<void> {
-    const previous = this._state.planner
-    this._state = { ...this._state, planner: { ...this._state.planner, ...config } }
-    this._notify()
-    
-    try {
-      await this._api.write('dual-model', { planner: this._state.planner })
-    } catch (error) {
-      this._state = { ...this._state, planner: previous }
-      this._notify()
-      throw error
-    }
-  }
-  
-  /** Update collaboration strategy */
+
   async updateStrategy(strategy: CollaborationStrategy): Promise<void> {
-    const previous = this._state.strategy
-    this._state = { ...this._state, strategy }
-    this._notify()
-    
-    try {
-      await this._api.write('dual-model', { strategy })
-    } catch (error) {
-      this._state = { ...this._state, strategy: previous }
-      this._notify()
-      throw error
-    }
+    this.store.update((s) => { s.strategy = strategy })
   }
+
+  dispose(): void { this.generation += 1 }
+}
+
+export function refreshIfLoaded(controller: DualModelController): void {
+  if (controller.store.getSnapshot().status === 'idle') return
+  void controller.load()
 }
