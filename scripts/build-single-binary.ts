@@ -4,10 +4,10 @@
  * Build script for creating single binary distributions of DeepSeek Harness.
  * This script packages the Node.js application into a single executable binary
  * for multiple platforms (darwin/linux/windows × amd64/arm64).
- * 
+ *
  * Usage:
  *   node scripts/build-single-binary.ts [options]
- * 
+ *
  * Options:
  *   --platform <platform>    Target platform (darwin, linux, windows)
  *   --arch <arch>           Target architecture (amd64, arm64)
@@ -17,7 +17,7 @@
  */
 
 import { execSync } from 'node:child_process'
-import { mkdirSync, existsSync, readdirSync, statSync, copyFileSync } from 'node:fs'
+import { mkdirSync, copyFileSync } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
 import { parseArgs } from 'node:util'
 
@@ -115,14 +115,14 @@ const packageJson = {
   version: '0.1.0-rc.5',
   description: 'DeepSeek Harness - AI Agent Framework',
   bin: {
-    'dsh': './bin/dsh.js'
+    'dsh': './bin/dsh.js',
   },
   dependencies: {
     '@deepseek-ai/cordis': 'workspace:^',
     '@deepseek-ai/dsh-settings': 'workspace:^',
     '@deepseek-ai/dsh-settings-toml': 'workspace:^',
     // Add other necessary dependencies
-  }
+  },
 }
 
 const bundledPackageJsonPath = join(BUILD_DIR, 'package.json')
@@ -166,6 +166,7 @@ writeFileSync(entryScriptPath, entryScript)
 console.log('\n5. Creating binary...')
 const binaryName = `dsh-${options.platform}-${options.arch}${options.platform === 'windows' ? '.exe' : ''}`
 const binaryPath = join(OUTPUT_DIR, binaryName)
+console.log(`Binary will be created at: ${binaryPath}`)
 
 // For now, we'll create a wrapper script that can be executed
 // In a real implementation, you would use a tool like pkg, nexe, or electron-builder
@@ -202,22 +203,22 @@ if (!options.skipZip) {
   console.log('\n6. Creating zip archive...')
   const zipName = `dsh-${options.platform}-${options.arch}.zip`
   const zipPath = join(OUTPUT_DIR, zipName)
-  
+
   try {
     // Create a temporary directory with all necessary files
     const tempDir = join(BUILD_DIR, 'temp-package')
     mkdirSync(tempDir, { recursive: true })
-    
+
     // Copy essential files
     copyFileSync(wrapperScriptPath, join(tempDir, basename(wrapperScriptPath)))
     copyFileSync(join(BUILD_DIR, 'package.json'), join(tempDir, 'package.json'))
-    
+
     // Create zip archive
     execSync(`cd ${BUILD_DIR} && zip -r ${zipPath} temp-package`, { stdio: 'inherit' })
-    
+
     // Clean up
     execSync(`rm -rf ${tempDir}`, { stdio: 'inherit' })
-    
+
     console.log(`✓ Zip archive created: ${zipPath}`)
   } catch (error) {
     console.error('✗ Failed to create zip archive')
@@ -234,11 +235,11 @@ const manifest = {
   files: [
     binaryName,
     `dsh-${options.platform}-${options.arch}${options.platform === 'windows' ? '.bat' : '.sh'}`,
-    `dsh-${options.platform}-${options.arch}.zip`
+    `dsh-${options.platform}-${options.arch}.zip`,
   ],
   checksums: {
     // In a real implementation, you would calculate SHA256 checksums
-  }
+  },
 }
 
 const manifestPath = join(OUTPUT_DIR, `manifest-${options.platform}-${options.arch}.json`)
