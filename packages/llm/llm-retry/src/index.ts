@@ -7,14 +7,18 @@
 
 import { randomUUID } from 'node:crypto'
 import type { Context, Events } from '@deepseek-ai/cordis'
+import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import type { Agent, RequestErrorAction } from '@deepseek-ai/dsh-agent'
-import type { LlmFailure, ResolvedRetryPolicy } from '@deepseek-ai/dsh-llm'
+import { DEFAULT_MAX_RETRIES, type LlmFailure, type ResolvedRetryPolicy } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { RetryId } from './brand.ts'
 import type { LlmRetryEventData } from './types.ts'
+import { MODEL_SETTINGS_NAMESPACE, ModelSettingsSchema, type ModelSettings } from './model-settings.ts'
 
 export type { LlmRetryEventData, LlmRetryStartedEventData } from './types.ts'
+export type { ModelSettings } from './model-settings.ts'
+export { MODEL_SETTINGS_NAMESPACE } from './model-settings.ts'
 export { RetryId } from './brand.ts'
 
 export const name = 'llm-retry'
@@ -100,6 +104,28 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
   validateConfig(config)
   const random = internals.random ?? Math.random
   const lifetime = new AbortController()
+
+  // Model-request retry default, configured live from the `model` settings
+  // namespace. A provider that declares its own retry policy keeps it; the
+  // resolver default is overridden by this value for every other provider.
+  let modelMaxRetries = DEFAULT_MAX_RETRIES
+  let currentModelSettings: (() => ModelSettings) | undefined
+  installSettingsSection<ModelSettings>(
+    ctx,
+    settingsNamespace(MODEL_SETTINGS_NAMESPACE),
+    ModelSettingsSchema,
+    { maxRetries: DEFAULT_MAX_RETRIES },
+    {
+      setSource: (current) => {
+        currentModelSettings = current
+        modelMaxRetries = current().maxRetries
+      },
+      onChange: () => {
+        if (currentModelSettings !== undefined) modelMaxRetries = currentModelSettings().maxRetries
+      },
+    },
+  )
+
   const active = new Set<Promise<RequestErrorAction>>()
 
   function track(operation: Promise<RequestErrorAction>): Promise<RequestErrorAction> {
@@ -119,6 +145,7 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
     retry: number,
     retryId: RetryId,
     delayMs: number,
+    effectiveMaxRetries: number,
     signal: AbortSignal,
   ): Promise<RequestErrorAction> {
     const fusedSignal = AbortSignal.any([signal, lifetime.signal])
@@ -132,7 +159,7 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
         mode: policy.mode,
         policyKey,
         retry,
-        maxRetries: policy.maxRetries,
+        maxRetries: effectiveMaxRetries,
         delayMs,
         failure,
       }
@@ -187,7 +214,10 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
       && event.data.policyKey === policyKey,
     )
     const previousRetry = priorPolicyRetry?.data.retry ?? 0
-    if (policy.mode === 'normal' && previousRetry >= policy.maxRetries) return next()
+    const effectiveMaxRetries = policy.mode === 'normal'
+      ? (policy.defaulted === true ? modelMaxRetries : policy.maxRetries)
+      : Number.POSITIVE_INFINITY
+    if (policy.mode === 'normal' && previousRetry >= effectiveMaxRetries) return next()
     const retry = previousRetry + 1
     const retryId = priorPolicyRetry?.data.retryId ?? RetryId(randomUUID())
     let delayMs: number
@@ -204,7 +234,7 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
       delayMs = localDelay(policy, retry, random)
     }
 
-    return backoff(agent, turn, step, failure, provider, policy, policyKey, retry, retryId, delayMs, signal)
+    return backoff(agent, turn, step, failure, provider, policy, policyKey, retry, retryId, delayMs, effectiveMaxRetries, signal)
   }
 
   const disposeListener = ctx.on('agent/request-error', (

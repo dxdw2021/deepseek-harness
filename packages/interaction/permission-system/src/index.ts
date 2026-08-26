@@ -211,7 +211,7 @@ export class PermissionSystemService extends Service {
     const matchingRules = this.findMatchingRules(resourceType, resource, action)
 
     // Evaluate rules
-    let result: PermissionCheckResult
+    let result: PermissionCheckResult | undefined
 
     if (matchingRules.length === 0) {
       // No matching rules, apply default policy
@@ -244,7 +244,7 @@ export class PermissionSystemService extends Service {
       }
 
       // If no rule granted permission
-      if (!result!) {
+      if (!result) {
         result = {
           granted: false,
           reason: 'No matching rule granted permission',
@@ -266,8 +266,8 @@ export class PermissionSystemService extends Service {
         resource,
         action,
         granted: result.granted,
-        reason: result.reason,
-        context,
+        ...(result.reason !== undefined ? { reason: result.reason } : {}),
+        ...(context !== undefined ? { context } : {}),
       })
     }
 

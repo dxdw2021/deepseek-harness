@@ -13,6 +13,10 @@ examples/*/.sessions/
 coverage/
 .doc-typecheck-*/
 .node-next-types-*/
+# Desktop bundled runtime is a build artifact; keep it out of git (>100MB).
+packages/desktop/resources/dsh-runtime.zip
+packages/desktop/resources/dsh/
+packages/desktop/resources/node/
 .oxlint-contract-*/
 .oxlintrc.contract-*.json
 oxlint-contract-*.ts
@@ -39,3 +43,5 @@ worktrees/
 .agents/worktrees/
 .typert-*/
 .hooks/
+
+.trae/

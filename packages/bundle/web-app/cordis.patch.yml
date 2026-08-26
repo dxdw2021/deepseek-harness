@@ -192,6 +192,9 @@
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'
 
+    - id: ui-settings-model-retry
+      name: '@deepseek-ai/dsh-client-ui-settings-model-retry'
+
     - id: ui-settings-plugin-inventory
       name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
 
@@ -218,6 +221,11 @@
 
     - id: ui-workspace
       name: '@deepseek-ai/dsh-client-ui-workspace'
+
+    # Desktop integration: Electron bridge, command palette (Ctrl+K), status bar.
+    # Auto-detects window.electronAPI; no-ops gracefully in browser-only mode.
+    - id: ui-desktop
+      name: '@deepseek-ai/dsh-client-ui-desktop'
 
     # Input triggers: the '/' | '@' pipeline (ui-input-trigger), the command surface over
     # it (ui-commands), and the two reference sources (ui-skill / ui-subagent).
@@ -272,6 +280,26 @@
 
     - id: ui-trajectory
       name: '@deepseek-ai/dsh-client-ui-trajectory'
+
+    # ── Reasonix feature replication UI panels ────────────────────────────
+
+    - id: ui-execution-mode
+      name: '@deepseek-ai/dsh-client-ui-execution-mode'
+
+    - id: ui-dual-model
+      name: '@deepseek-ai/dsh-client-ui-dual-model'
+
+    - id: ui-tool-registry
+      name: '@deepseek-ai/dsh-client-ui-tool-registry'
+
+    - id: ui-permission-management
+      name: '@deepseek-ai/dsh-client-ui-permission-management'
+
+    - id: ui-bot-im
+      name: '@deepseek-ai/dsh-client-ui-bot-im'
+
+    - id: ui-theme-enhanced
+      name: '@deepseek-ai/dsh-client-ui-theme-enhanced'
 
 # ── the agent plane moves behind agent presets ─────────────────────────────
 #
