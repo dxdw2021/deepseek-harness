@@ -7,14 +7,14 @@
 
 import { randomUUID } from 'node:crypto'
 import type { Context, Events } from '@deepseek-ai/cordis'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import type { Agent, RequestErrorAction } from '@deepseek-ai/dsh-agent'
 import { DEFAULT_MAX_RETRIES, type LlmFailure, type ResolvedRetryPolicy } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { RetryId } from './brand.ts'
 import type { LlmRetryEventData } from './types.ts'
-import { MODEL_SETTINGS_NAMESPACE, ModelSettingsSchema, type ModelSettings } from './model-settings.ts'
+import { MODEL_SETTINGS_NAMESPACE, type ModelSettings } from './model-settings.ts'
 
 export type { LlmRetryEventData, LlmRetryStartedEventData } from './types.ts'
 export type { ModelSettings } from './model-settings.ts'
@@ -108,23 +108,17 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
   // Model-request retry default, configured live from the `model` settings
   // namespace. A provider that declares its own retry policy keeps it; the
   // resolver default is overridden by this value for every other provider.
-  let modelMaxRetries = DEFAULT_MAX_RETRIES
-  let currentModelSettings: (() => ModelSettings) | undefined
-  installSettingsSection<ModelSettings>(
-    ctx,
-    settingsNamespace(MODEL_SETTINGS_NAMESPACE),
-    ModelSettingsSchema,
-    { maxRetries: DEFAULT_MAX_RETRIES },
-    {
-      setSource: (current) => {
-        currentModelSettings = current
-        modelMaxRetries = current().maxRetries
-      },
-      onChange: () => {
-        if (currentModelSettings !== undefined) modelMaxRetries = currentModelSettings().maxRetries
-      },
-    },
-  )
+  //
+  // The `model` namespace is registered by the client package's host half
+  // (`ui-settings-model-retry`) so the provider owns persistence and the
+  // client sees it on the very first describe() call.  We read the value
+  // through the provider's `get()` method — no separate scope needed.
+  function readModelMaxRetries(): number {
+    const settings = ctx.get('settings')
+    if (settings === undefined) return DEFAULT_MAX_RETRIES
+    const value = settings.get(settingsNamespace(MODEL_SETTINGS_NAMESPACE)) as ModelSettings | undefined
+    return value?.maxRetries ?? DEFAULT_MAX_RETRIES
+  }
 
   const active = new Set<Promise<RequestErrorAction>>()
 
@@ -215,7 +209,7 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
     )
     const previousRetry = priorPolicyRetry?.data.retry ?? 0
     const effectiveMaxRetries = policy.mode === 'normal'
-      ? (policy.defaulted === true ? modelMaxRetries : policy.maxRetries)
+      ? (policy.defaulted === true ? readModelMaxRetries() : policy.maxRetries)
       : Number.POSITIVE_INFINITY
     if (policy.mode === 'normal' && previousRetry >= effectiveMaxRetries) return next()
     const retry = previousRetry + 1
