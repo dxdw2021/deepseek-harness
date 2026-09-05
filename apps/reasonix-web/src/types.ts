@@ -259,6 +259,8 @@ export interface ApiClient {
   selectModel(sessionId: string, selection: ModelSelection): Promise<ModelSelection>
   /** List one directory level on the host for the in-app file browser (directories only). */
   listDirectory(path?: string): Promise<DirectoryListing>
+  /** Open the host's native folder picker; resolves to the chosen path, or null when cancelled. */
+  pickDirectory(): Promise<string | null>
   /** List the skills registered for a session. */
   listSkills(sessionId: string): Promise<SkillEntry[]>
   /** Full-text search across sessions (message content); returns sessionId + snippet. */

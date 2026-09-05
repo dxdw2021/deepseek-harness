@@ -1976,3 +1976,12 @@
 }
 .nsp__create:hover { background: var(--accent-hover); }
 .nsp__create:disabled { opacity: 0.5; cursor: default; }
+
+.nsp__browse {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: 8px;
+  background: var(--bg-hover); border: 1px solid var(--border);
+  color: var(--text); font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.nsp__browse:hover { border-color: var(--accent); }
+.nsp__browse:disabled { opacity: 0.6; cursor: default; }

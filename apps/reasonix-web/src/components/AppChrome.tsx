@@ -12,6 +12,10 @@ interface Props {
   onNewTab: () => void
   onOpenPalette: () => void
   onOpenSettings: () => void
+  /** Project name of the active session (shown as the top tab title). */
+  activeProject?: string
+  /** Working directory of the active session (shown as the tab tooltip). */
+  activeCwd?: string
 }
 
 export function AppChrome({
@@ -22,6 +26,8 @@ export function AppChrome({
   onNewTab,
   onOpenPalette,
   onOpenSettings,
+  activeProject,
+  activeCwd,
 }: Props) {
   const searchSessions = useStore(s => s.searchSessions)
   const selectSession = useStore(s => s.selectSession)
@@ -78,8 +84,8 @@ export function AppChrome({
       </button>
 
       <div className="tab-strip">
-        <div className="tab tab--active">
-          <span>deepseek-harness</span>
+        <div className="tab tab--active" title={activeCwd ? `工作目录：${activeCwd}` : '默认工作目录'}>
+          <span>{activeProject ?? '未选择项目'}</span>
           <button className="tab__close" title="关闭">
             <X size={12} />
           </button>

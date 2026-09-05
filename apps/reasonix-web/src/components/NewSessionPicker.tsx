@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Folder, Plus, X } from 'lucide-react'
+import { Folder, FolderOpen, Plus, X } from 'lucide-react'
+import { useStore } from '../lib/store'
 
 export interface ProjectOption {
   name: string
@@ -14,16 +15,28 @@ interface NewSessionPickerProps {
 
 /**
  * Project picker shown before creating a session: choose an existing project
- * (from prior sessions' cwd), the default workspace, or enter a custom working
- * directory. Clicking a row immediately creates the session in that project.
+ * (from prior sessions' cwd), the default workspace, browse the host filesystem
+ * via the native folder dialog, or type a custom working directory.
  */
 export function NewSessionPicker({ projects, onPick, onClose }: NewSessionPickerProps) {
   const [custom, setCustom] = useState('')
+  const [browsing, setBrowsing] = useState(false)
+  const pickDirectory = useStore(s => s.pickDirectory)
 
   const createCustom = () => {
     const path = custom.trim()
     if (!path) return
     onPick(path)
+  }
+
+  const browse = async () => {
+    setBrowsing(true)
+    try {
+      const path = await pickDirectory()
+      if (path) onPick(path)
+    } finally {
+      setBrowsing(false)
+    }
   }
 
   return (
@@ -49,13 +62,21 @@ export function NewSessionPicker({ projects, onPick, onClose }: NewSessionPicker
             </button>
           ))}
           {projects.length === 0 && (
-            <div className="nsp__empty">暂无项目，可在下方输入自定义目录</div>
+            <div className="nsp__empty">暂无项目，可在下方浏览文件夹或输入自定义目录</div>
           )}
         </div>
         <div className="nsp__custom">
+          <button
+            className="nsp__browse"
+            onClick={() => void browse()}
+            disabled={browsing}
+            title="打开系统文件夹选择器"
+          >
+            <FolderOpen size={14} /> {browsing ? '选择中…' : '浏览文件夹'}
+          </button>
           <input
             className="nsp__input"
-            placeholder="输入自定义工作目录（如 D:\work\demo）"
+            placeholder="或输入自定义工作目录"
             value={custom}
             onChange={e => setCustom(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') createCustom() }}

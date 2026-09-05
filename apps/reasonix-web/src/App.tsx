@@ -38,6 +38,8 @@ export function App() {
   const openSidePanel = useStore(s => s.openSidePanel)
   const [newPickerOpen, setNewPickerOpen] = useState(false)
 
+  const activeSession = sessions.find(s => s.id === activeSessionId)
+
   const projects = useMemo<ProjectOption[]>(() => {
     const byCwd = new Map<string, string>()
     for (const s of sessions) {
@@ -65,6 +67,8 @@ export function App() {
         onNewTab={() => setNewPickerOpen(true)}
         onOpenPalette={() => openCommandPalette(true)}
         onOpenSettings={() => openSettings(true)}
+        activeProject={activeSession?.projectName}
+        activeCwd={activeSession?.cwd}
       />
       <div className="app__body">
         <Sidebar
