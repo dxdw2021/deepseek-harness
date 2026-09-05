@@ -129,6 +129,8 @@ if (dshRunning) {
   // Source-launch the CLI exactly like `pnpm dsh` (tsx ESM hook): the built
   // `apps/cli/lib/bin.js` may be stale or absent on a source checkout, and the
   // web-app bundle prefers the Reasonix skin dist over the official shell.
+  // 数据目录使用默认 DSH_HOME（~/.dsh），与 7890 后端共享会话与模型配置，
+  // 否则桌面端会看到空会话、模型未加载。
   const dshPath = join(REPO_ROOT, 'apps/cli/src/bin.ts')
 
   dshProcess = spawn(process.execPath, ['--import', 'tsx/esm', dshPath, 'web', '--port', String(DSH_PORT)], {
@@ -137,8 +139,6 @@ if (dshRunning) {
     env: {
       ...process.env,
       NODE_ENV: 'development',
-      // 开发版使用独立 DSH_HOME，与安装版完全隔离
-      DSH_HOME: devDshHome,
     }
   })
 
