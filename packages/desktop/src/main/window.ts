@@ -9,7 +9,6 @@
 
 import { BrowserWindow, screen } from 'electron'
 import { join, dirname } from 'path'
-import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import Store from 'electron-store'
 
@@ -250,25 +249,6 @@ export function createMainWindow(port: number, initialUrl?: string): BrowserWind
         ],
       },
     })
-  })
-
-  // Inject sidebar script into the web page after it finishes loading.
-  // The script creates a toggle button (◀) on the right edge that opens
-  // a Files / Changes panel powered by the preload IPC bridge.
-  function injectSidebar(): void {
-    try {
-      const injectPath = join(__dirname, '../../resources/sidebar-inject.js')
-      const injectCode = readFileSync(injectPath, 'utf-8')
-      void win.webContents.executeJavaScript(injectCode).catch(() => {})
-    } catch (err) {
-      console.error('[dsh-desktop] Failed to inject sidebar:', err)
-    }
-  }
-
-  win.webContents.on('did-finish-load', injectSidebar)
-  // Also re-inject after in-page navigations (SPA route changes)
-  win.webContents.on('did-navigate-in-page', (_event, _url, isMainFrame) => {
-    if (isMainFrame) injectSidebar()
   })
 
   return win
