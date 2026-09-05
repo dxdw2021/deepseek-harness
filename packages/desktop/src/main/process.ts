@@ -84,10 +84,19 @@ function resolveDshPath(): string {
   const exeName = process.platform === 'win32' ? 'dsh.exe' : 'dsh'
 
   if (isDev) {
-    // Development: use apps/cli/lib/bin.js directly
+    // Development: source-launch the CLI exactly like `pnpm dsh` (tsx ESM
+    // hook) so the served frontend is the Reasonix skin, not a stale or
+    // absent built `apps/cli/lib/bin.js` falling back to the official shell.
     const repoRoot = join(__dirname, '../../../..')
-    const binPath = join(repoRoot, 'apps/cli/lib/bin.js')
+    const srcBin = join(repoRoot, 'apps/cli/src/bin.ts')
 
+    if (existsSync(srcBin)) {
+      console.log(`[dsh-process] Using dsh src: ${srcBin}`)
+      return `node-src:${srcBin}`
+    }
+
+    // Legacy fallback for checkouts without the CLI source tree.
+    const binPath = join(repoRoot, 'apps/cli/lib/bin.js')
     if (existsSync(binPath)) {
       console.log(`[dsh-process] Using dsh bin: ${binPath}`)
       // Return as array to indicate it needs node
@@ -206,7 +215,9 @@ export async function startDshWeb(options: StartDshWebOptions = {}): Promise<num
 
   // Check if it needs node
   const needsNode = dshPath.startsWith('node:')
-  const actualPath = needsNode ? dshPath.slice(5) : dshPath
+  const needsSourceNode = dshPath.startsWith('node-src:')
+  const needsLoader = needsSourceNode
+  const actualPath = needsSourceNode ? dshPath.slice('node-src:'.length) : needsNode ? dshPath.slice(5) : dshPath
 
   // Verify dsh exists
   if (!needsNode && !existsSync(actualPath)) {
@@ -233,15 +244,22 @@ export async function startDshWeb(options: StartDshWebOptions = {}): Promise<num
     // Start dsh web with port 0 (OS-assigned) to avoid conflicts. The dsh
     // runtime activates its internal module loader (and with it the HMR service)
     // only when launched with --expose-internals, exactly as the CLI launcher does.
-    const args = needsNode
-      ? ['--expose-internals', actualPath, 'web', '--port', '0']
+    const args = needsNode || needsSourceNode
+      ? ['--expose-internals', ...(needsLoader ? ['--import', 'tsx/esm'] : []), actualPath, 'web', '--port', '0']
       : ['web', '--port', '0']
     // Real Node when available, Electron-as-node otherwise (see resolveNodeCommand).
-    const command = needsNode ? resolveNodeCommand() : actualPath
+    const command = needsNode || needsSourceNode ? resolveNodeCommand() : actualPath
     const usesElectronNode = needsNode && command === process.execPath
 
-    // 生产模式下，设置 NODE_PATH 让 Electron-as-Node 能找到 bundled 依赖
-    const dshDir = needsNode ? join(dirname(actualPath), '..') : dirname(actualPath)
+    // Source mode runs against the repository root so tsx/esm resolves from
+    // the workspace; bundled modes set NODE_PATH so Electron-as-Node finds the
+    // packaged dependencies.
+    const repoRoot = join(__dirname, '../../../..')
+    const dshDir = needsSourceNode
+      ? repoRoot
+      : needsNode
+        ? join(dirname(actualPath), '..')
+        : dirname(actualPath)
     const nodeModulesDir = join(dshDir, 'node_modules')
 
     // 使用持久化 DSH_HOME（默认 ~/.dsh，与 CLI 一致）：保留 settings/sessions，
@@ -252,8 +270,8 @@ export async function startDshWeb(options: StartDshWebOptions = {}): Promise<num
       ...process.env,
       NODE_ENV: 'production',
     }
-    if (needsNode) {
-      if (usesElectronNode) dshEnv.ELECTRON_RUN_AS_NODE = '1'
+    if (needsNode || needsSourceNode) {
+      if (usesElectronNode || needsSourceNode) dshEnv.ELECTRON_RUN_AS_NODE = '1'
       dshEnv.NODE_PATH = nodeModulesDir
     }
 

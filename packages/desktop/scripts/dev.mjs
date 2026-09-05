@@ -122,9 +122,12 @@ if (dshRunning) {
     console.log('[dev] 已清理')
   }
 
-  const dshPath = join(REPO_ROOT, 'apps/cli/lib/bin.js')
+  // Source-launch the CLI exactly like `pnpm dsh` (tsx ESM hook): the built
+  // `apps/cli/lib/bin.js` may be stale or absent on a source checkout, and the
+  // web-app bundle prefers the Reasonix skin dist over the official shell.
+  const dshPath = join(REPO_ROOT, 'apps/cli/src/bin.ts')
 
-  dshProcess = spawn(process.execPath, [dshPath, 'web', '--port', String(DSH_PORT)], {
+  dshProcess = spawn(process.execPath, ['--import', 'tsx/esm', dshPath, 'web', '--port', String(DSH_PORT)], {
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: REPO_ROOT,
     env: {
