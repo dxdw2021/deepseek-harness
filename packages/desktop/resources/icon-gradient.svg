@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="DeepSeek Harness">
+  <defs>
+    <!-- 彩色渐变背景 -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366F1"/>
+      <stop offset="50%" style="stop-color:#8B5CF6"/>
+      <stop offset="100%" style="stop-color:#A855F7"/>
+    </linearGradient>
+    <!-- 蓝青渐变 (用于 H 字母) -->
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#38BDF8"/>
+      <stop offset="100%" style="stop-color:#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <!-- 圆角矩形背景 (Reasonix 风格) -->
+  <g transform="scale(2.56)">
+    <rect width="400" height="400" rx="126.37" ry="126.37" fill="url(#bgGrad)"/>
+    <!-- H 字母 (白色，Reasonix 风格) -->
+    <g transform="translate(100, 60)">
+      <!-- 左竖 -->
+      <path d="M0 10 L0 270" fill="none" stroke="#fff" stroke-width="40" stroke-linecap="round"/>
+      <!-- 右竖 -->
+      <path d="M200 10 L200 270" fill="none" stroke="#fff" stroke-width="40" stroke-linecap="round"/>
+      <!-- 横 -->
+      <path d="M0 140 L200 140" fill="none" stroke="url(#blueGrad)" stroke-width="40" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>

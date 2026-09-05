@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { mkdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -111,6 +111,7 @@ import {
   inspectApiRemoteSession,
 } from '@deepseek-ai/dsh-api-remotes'
 import { canOpenNativePath, openNativePath, openNativeTextFile } from './native-path-opener.ts'
+import { transcribePcm } from './audio-transcriber.ts'
 
 /** Page size when history is called without maxMessages. */
 const DEFAULT_MAX_MESSAGES = 50
@@ -127,6 +128,11 @@ const DEFAULT_MAX_MESSAGES = 50
  */
 const WEB_SETTINGS_NAMESPACES = [
   'agent-loop', 'shell', 'locale', 'permission', 'ui-conversation', 'ui-theme', 'web-search-deepseek',
+  // The Model Requests settings row (default max model-request retries) owns
+  // the `model` namespace; without it here the browser never receives the
+  // value (empty input) and `mutate` returns `settings-not-exposed` (no
+  // persistence).
+  'model',
 ] as const
 
 /** Provider work budget: at most 100 calls and 2,000 inspected hits. */
@@ -147,6 +153,20 @@ function decodeBase64(data: string): Uint8Array {
     throw new AttachmentError('Image upload is not canonical base64.', 'INVALID_IMAGE_BASE64')
   }
   return new Uint8Array(decoded)
+}
+
+/** Decode base64 16-bit little-endian mono PCM into normalized float samples. */
+function decodePcm16(data: string): Float32Array {
+  const decoded = Buffer.from(data, 'base64')
+  if (decoded.length === 0 || decoded.length % 2 !== 0) {
+    throw new Error('audio payload is not an even-length 16-bit PCM buffer')
+  }
+  const n = decoded.length / 2
+  const out = new Float32Array(n)
+  for (let i = 0; i < n; i++) {
+    out[i] = decoded.readInt16LE(i * 2) / 32768
+  }
+  return out
 }
 
 /** Validate one prompt as a batch before publishing any durable image object. */
@@ -657,6 +677,20 @@ function directoryError(error: unknown): RpcError {
     return { code: error.code, message: error.message, details: { path: error.path } }
   }
   return { code: 'internal', message: error instanceof Error ? error.message : String(error), details: {} }
+}
+
+/**
+ * Whether a path is fully qualified on this host: POSIX-absolute on POSIX,
+ * drive-qualified or complete UNC on Windows (mirrors the browse seam's
+ * rule — a rooted drive-less form resolves against the process cwd, which a
+ * host filesystem read must never do silently).
+ * @param path - candidate path.
+ * @returns whether the path names one fixed filesystem location.
+ */
+function isFullyQualifiedPath(path: string): boolean {
+  return process.platform === 'win32'
+    ? /^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/]+[^\\/]+)/.test(path)
+    : path.startsWith('/')
 }
 
 /** Resolved Agent model and project-directory defaults consumed by the API implementation. */
@@ -3035,6 +3069,44 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       async openPath(request, signal) {
         return openPath(request, request.payload.path, signal)
       },
+
+      /**
+       * One-level directory+file listing for the project-file browser. Unlike
+       * the chooser-backed methods this is a plain host filesystem read, so
+       * it serves under any composed picker capability. Synchronous per level:
+       * a level is at most a few thousand dirents and the read is a single
+       * syscall batch, so the default unary timeout leaves ample headroom and
+       * there is nothing to abort mid-flight.
+       */
+      async listFiles(request) {
+        const target = request.payload.path === undefined ? homedir() : request.payload.path
+        if (!isFullyQualifiedPath(target)) {
+          return err(request, {
+            code: 'directory-unreadable',
+            message: `cannot list "${target}": not a fully qualified path`,
+            details: { path: target },
+          })
+        }
+        try {
+          const dirents = readdirSync(target, { withFileTypes: true })
+          const rows = dirents.map(d => ({
+            name: d.name,
+            path: join(target, d.name),
+            hidden: d.name.startsWith('.'),
+            isDirectory: d.isDirectory(),
+          }))
+          rows.sort((a, b) =>
+            a.isDirectory === b.isDirectory
+              ? a.name.localeCompare(b.name)
+              : a.isDirectory
+                ? -1
+                : 1,
+          )
+          return ok(request, { path: target, entries: rows, truncated: false })
+        } catch (error: unknown) {
+          return err(request, directoryError(error))
+        }
+      },
     },
 
     goals: {
@@ -3475,6 +3547,26 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         if (current !== undefined) return ok(request, { imported: false, alreadyPresent: true })
         await credentials.set(ref, secret)
         return ok(request, { imported: true, alreadyPresent: false })
+      },
+    },
+
+    audio: {
+      async transcribe(request) {
+        const { audio, sampleRate } = request.payload
+        try {
+          const pcm = decodePcm16(audio)
+          const result = await transcribePcm(pcm, sampleRate)
+          return ok(request, result)
+        } catch (error: unknown) {
+          // Local STT is a best-effort capability: model download, WASM init,
+          // or recognition failures are all the user's next move, not a
+          // transport fault.
+          return err(request, {
+            code: 'internal',
+            message: error instanceof Error ? error.message : String(error),
+            details: {},
+          })
+        }
       },
     },
 

@@ -9,14 +9,15 @@
 
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import { EMPTY_RESPONSE_CODE } from './error.ts'
+import { EMPTY_RESPONSE_CODE, STREAM_CLOSED_CODE } from './error.ts'
 
-const DEFAULT_MAX_RETRIES = 2
+export const DEFAULT_MAX_RETRIES = 2
 const DEFAULT_INITIAL_DELAY_MS = 500
 const DEFAULT_MAX_DELAY_MS = 10_000
 const DEFAULT_JITTER_RATIO = 0.1
 const DEFAULT_RETRYABLE_CODES = Object.freeze([
   EMPTY_RESPONSE_CODE,
+  STREAM_CLOSED_CODE,
   'RATE_LIMIT',
   'SERVER',
   'TIMEOUT',
@@ -67,6 +68,8 @@ export interface ResolvedRetryBackoff {
 export interface ResolvedNormalRetryPolicy extends ResolvedRetryBackoff {
   readonly mode: 'normal'
   readonly maxRetries: number
+  /** Whether `maxRetries` came from the provider config (`false`) or the resolver default (`true`). */
+  readonly defaulted?: boolean
   readonly retryableCodes: readonly string[]
 }
 
@@ -150,6 +153,7 @@ export function resolveRetryPolicy(
     return Object.freeze({
       mode: 'normal',
       maxRetries: DEFAULT_MAX_RETRIES,
+      defaulted: true,
       retryableCodes: DEFAULT_RETRYABLE_CODES,
       ...resolveBackoff(undefined, `${path}.backoff`),
     })
@@ -175,6 +179,7 @@ export function resolveRetryPolicy(
       return Object.freeze({
         mode: 'normal',
         maxRetries,
+        defaulted: config.maxRetries === undefined,
         retryableCodes: Object.freeze([...retryableCodes]),
         ...resolveBackoff(config.backoff, `${path}.backoff`),
       })

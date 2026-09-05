@@ -76,7 +76,7 @@
 
 ## 错误
 
-非 2xx 响应抛出稳定码 `LlmError`：`AUTH`（401/403）、`QUOTA`（429 且提供方 code/type/message 标识免费/go 配额耗尽——包括匿名层按 IP 的每日上限 `FreeUsageLimitError`/`GoUsageLimitError`，以及任何命中共享配额分类器的细节）、`RATE_LIMIT`（其余 429）、`CONTEXT_WINDOW_EXCEEDED`（400 且提供方 code/type/message 标识上下文溢出）、`INVALID_REQUEST`（其余 400）、`SERVER`（5xx）、其余为 `HTTP_<status>`。其可序列化 `failure` 保留 HTTP 状态，外加有效的正 `Retry-After` 秒/日期延迟与存在时的 `x-request-id`。响应前传输失败（DNS、拒绝连接、TLS、代理）抛出 `TRANSPORT`，点名所配置端点并把原始拒绝链为 `cause`；调用方中止抛出 `ABORTED`，循环取消信号保持权威。协议违规抛出 `STREAM_CLOSED`（缺失 `[DONE]`）或 `MALFORMED_RESPONSE`（坏 JSON 载荷）。未知线上 `finish_reason`（如 `content_filter`）变成 `finish {kind: 'error', failure}` 分块，而一个已完成且空内容 `stop`（或缺省）结算未打开任何内容块的流变成 code 为 `EMPTY_RESPONSE` 的 `finish {kind: 'error'}`（默认策略会重试）。
+非 2xx 响应抛出稳定码 `LlmError`：`AUTH`（401/403）、`QUOTA`（429 且提供方 code/type/message 标识免费/go 配额耗尽——包括匿名层按 IP 的每日上限 `FreeUsageLimitError`/`GoUsageLimitError`，以及任何命中共享配额分类器的细节）、`RATE_LIMIT`（其余 429）、`CONTEXT_WINDOW_EXCEEDED`（400 且提供方 code/type/message 标识上下文溢出）、`INVALID_REQUEST`（其余 400）、`SERVER`（5xx）、其余为 `HTTP_<status>`。其可序列化 `failure` 保留 HTTP 状态，外加有效的正 `Retry-After` 秒/日期延迟与存在时的 `x-request-id`。响应前传输失败（DNS、拒绝连接、TLS、代理）抛出 `TRANSPORT`，点名所配置端点并把原始拒绝链为 `cause`；调用方中止抛出 `ABORTED`，循环取消信号保持权威。协议违规抛出 `STREAM_CLOSED`（缺失 `[DONE]`；默认策略会重试）或 `MALFORMED_RESPONSE`（坏 JSON 载荷）。未知线上 `finish_reason`（如 `content_filter`）变成 `finish {kind: 'error', failure}` 分块，而一个已完成且空内容 `stop`（或缺省）结算未打开任何内容块的流变成 code 为 `EMPTY_RESPONSE` 的 `finish {kind: 'error'}`（默认策略会重试）。
 
 ## Model Experience
 

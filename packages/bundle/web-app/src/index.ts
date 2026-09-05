@@ -115,12 +115,20 @@ function localWebUrl(ctx: Context): string {
 /** Dist location is workspace knowledge of this bundle: resolved through the frontend package exports, not configured. */
 function resolveDistIndex(): string {
   const require = createRequire(import.meta.url)
-  try {
-    return require.resolve('@deepseek-ai/dsh-web-frontend/dist/index.html')
-  } catch {
-    /* v8 ignore next 2 -- reachable only on a checkout without a built dist; the test tree builds it */
-    throw new Error('web-app: frontend dist not built; run pnpm run build from the repository root first')
+  // The Reasonix skin (`@deepseek-ai/dsh-reasonix-web`) is the served Web
+  // frontend once its dist is built; the official shell (`dsh-web-frontend`)
+  // remains the fallback so a checkout without the Reasonix dist still boots.
+  for (const spec of [
+    '@deepseek-ai/dsh-reasonix-web/dist/index.html',
+    '@deepseek-ai/dsh-web-frontend/dist/index.html',
+  ]) {
+    try {
+      return require.resolve(spec)
+    } catch {
+      // try the next frontend spec
+    }
   }
+  throw new Error('web-app: frontend dist not built; run pnpm run build from the repository root first')
 }
 
 /** Test hook: hosts with no built frontend dist substitute the resolver; production never touches this. */

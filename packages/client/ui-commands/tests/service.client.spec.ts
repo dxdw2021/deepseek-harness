@@ -16,6 +16,7 @@ import type { ClientSessionContext, ConsumeTokenRequest, InputTriggerPick, Input
 import type { CommandContribution, CommandDecoration, CommandUiSpec, SelectOption } from '../src/client/contract.ts'
 import type { CommandDescriptor } from '../src/client/directory.ts'
 import { CommandUiRuntime } from '../src/client/service.ts'
+import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 
 const sid = (k: string): SessionId => k as SessionId
 
@@ -91,6 +92,7 @@ async function bench(opts: BenchOptions = {}) {
       })
     },
   }
+  ctx.provide('locale', new LocaleRuntime(ctx))
   ctx.provide('inputTriggers', {
     registerSource(src: InputTriggerSource) {
       const key = `${src.trigger} ${src.name}`

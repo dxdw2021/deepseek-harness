@@ -194,6 +194,113 @@ export interface TodoItem {
 }
 
 /**
+ * Outcome verdict of a delivered result, recorded by the `completion/summary`
+ * session event. `success` means every required check passed; `partial` means
+ * the delivery shipped with degradations or skipped checks; `failure` means a
+ * required check failed or the delivery could not be completed.
+ */
+export type CompletionVerdict = 'success' | 'partial' | 'failure'
+
+/** Review disposition recorded alongside a delivered result. */
+export type CompletionReview =
+  | 'approved'
+  | 'changes_requested'
+  | 'pending'
+  | 'not_required'
+
+/**
+ * Counts a `completion/summary` carries for the checks it ran at delivery time.
+ * Every field is a non-negative integer; a producer that ran no checks reports
+ * zeros rather than omitting the block so projections can sum without branches.
+ */
+export interface CompletionChecks {
+  /** Checks that passed. */
+  passed: number
+  /** Checks that failed. */
+  failed: number
+  /** Checks intentionally suppressed by configuration (e.g. an allowlisted path). */
+  suppressed: number
+  /** Checks skipped because they did not apply to this delivery. */
+  skipped: number
+}
+
+/**
+ * Payload of the log-only `completion/summary` session event: a structured
+ * delivery verdict a producer records when an agent turn delivers a result.
+ * The shape is JSON-serializable (enforced at `Session.append`); the producer
+ * owns the `preset`/`gapKinds` vocabulary, so a reader treats them opaquely.
+ */
+export interface CompletionSummaryEventData {
+  /** Producer-chosen delivery preset label (e.g. `default`, `feature`, `fix`). */
+  preset: string
+  /** Overall verdict of the delivered result. */
+  verdict: CompletionVerdict
+  /** Number of product/artifact mutations the delivery made (files, records, …). */
+  mutations: number
+  /** Check counts at delivery time. */
+  checks: CompletionChecks
+  /** Human or automated review disposition. */
+  review: CompletionReview
+  /**
+   * Kinds of unmet requirements or gaps, if any. Producer-owned vocabulary;
+   * absent or empty means no gaps were recorded.
+   */
+  gapKinds?: string[]
+  /** True when a delivery constraint was degraded (e.g. a security check was skipped). */
+  constraintDegraded?: boolean
+  /** Optional free-text note attached by the producer. */
+  note?: string
+}
+
+/**
+ * Validate a candidate `completion/summary` payload. Throws a descriptive
+ * `Error` on the first violation so producers fail loud at the boundary rather
+ * than appending a non-reconstructable record. The session log's own
+ * `isJsonValue` check covers serializability; this adds the semantic bounds.
+ * @param data - the candidate payload.
+ */
+export function validateCompletionSummaryData(data: unknown): asserts data is CompletionSummaryEventData {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    throw new Error('completion/summary data must be an object')
+  }
+  const record = data as Record<string, unknown>
+  if (typeof record.preset !== 'string' || record.preset.length === 0) {
+    throw new Error('completion/summary.preset must be a non-empty string')
+  }
+  const verdicts: readonly CompletionVerdict[] = ['success', 'partial', 'failure']
+  if (!verdicts.includes(record.verdict as CompletionVerdict)) {
+    throw new Error(`completion/summary.verdict must be one of ${verdicts.join(', ')}`)
+  }
+  if (!Number.isInteger(record.mutations) || (record.mutations as number) < 0) {
+    throw new Error('completion/summary.mutations must be a non-negative integer')
+  }
+  if (typeof record.checks !== 'object' || record.checks === null || Array.isArray(record.checks)) {
+    throw new Error('completion/summary.checks must be an object')
+  }
+  const checks = record.checks as Record<string, unknown>
+  const counts: readonly (keyof CompletionChecks)[] = ['passed', 'failed', 'suppressed', 'skipped']
+  for (const key of counts) {
+    const value = checks[key]
+    if (!Number.isInteger(value) || (value as number) < 0) {
+      throw new Error(`completion/summary.checks.${key} must be a non-negative integer`)
+    }
+  }
+  const reviews: readonly CompletionReview[] = ['approved', 'changes_requested', 'pending', 'not_required']
+  if (!reviews.includes(record.review as CompletionReview)) {
+    throw new Error(`completion/summary.review must be one of ${reviews.join(', ')}`)
+  }
+  if (record.gapKinds !== undefined && (!Array.isArray(record.gapKinds) || record.gapKinds.some(g => typeof g !== 'string'))) {
+    throw new Error('completion/summary.gapKinds must be an array of strings when present')
+  }
+  if (record.constraintDegraded !== undefined && typeof record.constraintDegraded !== 'boolean') {
+    throw new Error('completion/summary.constraintDegraded must be a boolean when present')
+  }
+  if (record.note !== undefined && typeof record.note !== 'string') {
+    throw new Error('completion/summary.note must be a string when present')
+  }
+}
+
+/**
  * Logged request state outside derived history: call config, system prompt, and
  * tools. The latest full `request/header` snapshot reconstructs it; canonical
  * empty optional fields are absent.
@@ -330,6 +437,15 @@ export interface SessionEventMap {
    * so tolerating concurrent writers needs a signal beyond the log.
    */
   'session/end-seed': Record<string, never>
+  /**
+   * A delivery completion summary: the structured verdict a producer records
+   * when an agent turn delivers a result (a goal completion, a subagent
+   * hand-back, or an explicit summarize step). It is log-only — it carries no
+   * derived-history content and is absent from the ordered surface — so it is
+   * reconstructable from the log without shaping message replay. The latest
+   * write wins on projection; older summaries stay in the log for audit.
+   */
+  'completion/summary': CompletionSummaryEventData
 }
 
 /** The appendable event-type keys of {@link SessionEventMap}, plugin-merged extensions included. */

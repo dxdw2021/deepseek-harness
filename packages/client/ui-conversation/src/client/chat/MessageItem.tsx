@@ -106,11 +106,55 @@ function ModelRetryItem({ node, active, t }: {
         </div>
         <div>
           <span className={css.retryDetailLabel}>{t('message.retry.failure')}</span>
-          {node.failure.message}
+          {getTranslatedFailureMessage(node.failure, t)}
         </div>
       </div>
     </details>
   )
+}
+
+/** Map of error codes to locale keys for translated error messages. */
+const ERROR_CODE_TO_LOCALE_KEY: Record<string, string> = {
+  ENOSPC: 'message.turnError.enospc',
+  STREAM_CLOSED: 'message.turnError.streamClosed',
+  RATE_LIMIT: 'message.turnError.rateLimit',
+  SERVER: 'message.turnError.server',
+  TRANSPORT: 'message.turnError.transport',
+  TIMEOUT: 'message.turnError.timeout',
+  AUTH: 'message.turnError.auth',
+  ABORTED: 'message.turnError.aborted',
+  EMPTY_RESPONSE: 'message.turnError.emptyResponse',
+  MALFORMED_RESPONSE: 'message.turnError.malformedResponse',
+  UNSUPPORTED_CONTENT: 'message.turnError.unsupportedContent',
+  UNSUPPORTED_OPTION: 'message.turnError.unsupportedOption',
+  INVALID_ADAPTER: 'message.turnError.invalidAdapter',
+  INVALID_DIRECTORY: 'message.turnError.invalidDirectory',
+  INVALID_DISCOVERY: 'message.turnError.invalidDiscovery',
+  INVALID_CATALOG: 'message.turnError.invalidCatalog',
+  INVALID_PREPARED_CALL: 'message.turnError.invalidPreparedCall',
+  NO_ADAPTER: 'message.turnError.noAdapter',
+  NO_DISCOVERY: 'message.turnError.noDiscovery',
+  DUPLICATE_ADAPTER: 'message.turnError.duplicateAdapter',
+  DUPLICATE_DIRECTORY: 'message.turnError.duplicateDirectory',
+  DUPLICATE_DISCOVERY: 'message.turnError.duplicateDiscovery',
+  REGISTRATION_DISPOSED: 'message.turnError.registrationDisposed',
+  INVALID_REPLAY_STATE: 'message.turnError.invalidReplayState',
+  DISCOVERY_FAILED: 'message.turnError.discoveryFailed',
+  UNKNOWN_MODEL: 'message.turnError.unknownModel',
+  NO_ADAPTER_FOR_PROVIDER: 'message.turnError.noAdapterForProvider',
+  NO_MODEL_FOR_PROVIDER: 'message.turnError.noModelForProvider',
+  CONTEXT_WINDOW_EXCEEDED: 'message.turnError.contextWindowExceeded',
+  QUOTA: 'message.turnError.quotaExceeded',
+  INVALID_CREDENTIAL: 'message.turnError.invalidCredential',
+}
+
+/**
+ * Get the translated failure message for a given failure object.
+ * Falls back to the original message when no translation is available.
+ */
+function getTranslatedFailureMessage(failure: { code?: string; message: string }, t: ChatViewSlotProps['t']): string {
+  const localeKey = failure.code !== undefined ? ERROR_CODE_TO_LOCALE_KEY[failure.code] : undefined
+  return localeKey !== undefined ? t(localeKey as never) : failure.message
 }
 
 /** Persistent, turn-positioned feedback for a terminal failure. */
@@ -118,12 +162,16 @@ function TurnErrorItem({ node, t }: {
   node: TurnErrorNode
   t: ChatViewSlotProps['t']
 }) {
+  const displayMessage = getTranslatedFailureMessage(
+    { message: node.message, ...(node.code !== undefined ? { code: node.code } : {}) },
+    t,
+  )
   return (
     <div className={css.turnErrorRow} role="status">
       <StateDot state="error" className={css.turnErrorDot} />
       <div className={css.turnErrorCopy}>
         <span className={css.turnErrorTitle}>{t('message.turnError')}</span>
-        <span className={css.turnErrorMessage}>{node.message}</span>
+        <span className={css.turnErrorMessage}>{displayMessage}</span>
       </div>
       {node.code !== undefined && <code className={css.turnErrorCode}>{node.code}</code>}
     </div>
