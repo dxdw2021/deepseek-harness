@@ -63,6 +63,27 @@ export const hostCreateDirectoryRequestSchema = z.object({
 export const hostCreateDirectoryValueSchema = z.object({
   path: z.string(),
 }) satisfies z.ZodType<Wire<ResponseValue<'host.createDirectory'>>>
+
+/** One `host.listFiles` row: a directory or a plain file. */
+export const fileEntrySchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  hidden: z.boolean(),
+  isDirectory: z.boolean(),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.listFiles'>['entries'][number]>>
+
+/** host.listFiles request payload; an absent path lists the home directory. */
+export const hostListFilesRequestSchema = z.object({
+  path: z.string().optional(),
+}) satisfies z.ZodType<Wire<RequestPayload<'host.listFiles'>>>
+
+/** host.listFiles response value. */
+export const hostListFilesValueSchema = z.object({
+  path: z.string(),
+  entries: z.array(fileEntrySchema),
+  truncated: z.boolean(),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.listFiles'>>>
+
 /** host.openPath request payload. */
 export const hostOpenPathRequestSchema = z.object({
   path: z.string().min(1),

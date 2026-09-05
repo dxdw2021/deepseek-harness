@@ -226,6 +226,21 @@ export interface DirectoryListing {
   truncated: boolean
 }
 
+/** One row of a `host.listFiles` listing: a directory or a plain file. */
+export interface FileEntry {
+  name: string
+  path: string
+  hidden: boolean
+  isDirectory: boolean
+}
+
+/** `host.listFiles` value: one directory level, directories first. */
+export interface FileListing {
+  path: string
+  entries: FileEntry[]
+  truncated: boolean
+}
+
 /** One skill row of `skill.list`. */
 export interface SkillEntry {
   name: string
@@ -259,6 +274,8 @@ export interface ApiClient {
   selectModel(sessionId: string, selection: ModelSelection): Promise<ModelSelection>
   /** List one directory level on the host for the in-app file browser (directories only). */
   listDirectory(path?: string): Promise<DirectoryListing>
+  /** List one directory level with both directories and plain files (project file browser). */
+  listFiles(path?: string): Promise<FileListing>
   /** Open the host's native folder picker; resolves to the chosen path, or null when cancelled. */
   pickDirectory(): Promise<string | null>
   /** List the skills registered for a session. */

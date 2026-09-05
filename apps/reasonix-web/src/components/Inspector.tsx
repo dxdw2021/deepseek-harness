@@ -1,14 +1,15 @@
-import { useMemo, useState, type CSSProperties } from 'react'
-import { BarChart3, FileText, FolderOpen, GitCompare, Wrench } from 'lucide-react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { BarChart3, ChevronRight, FileText, Folder, FolderOpen, FolderUp, GitCompare, Home, Loader2, Wrench } from 'lucide-react'
 import { useStore } from '../lib/store'
-import type { Message, ToolCall } from '../types'
+import type { FileEntry, Message, ToolCall } from '../types'
 
 /**
  * Right-side inspector pane. Toggled by the PanelRight button in the top-right
  * chrome (store.inspectorOpen) and switchable between three tabs:
  *
  *  - overview: live session metrics, context ring and token distribution
- *  - files:    file paths referenced by tool calls in the current transcript
+ *  - files:    project file browser rooted at the active session's cwd
+ *              (`host.listFiles`, one level at a time with breadcrumbs)
  *  - changes:  tool-call log (reference to DeepSeek-GUI ChangeInspector), with
  *              an expandable detail strip for the selected call
  *
@@ -46,37 +47,6 @@ function formatCost(n: number): string {
   return `$${n.toFixed(3)}`
 }
 
-// File extensions commonly produced by harness tool calls; used to pull
-// candidate paths out of tool args/results for the files tab. The `*` is
-// included so glob patterns like `**/*.syso` or `build/*.syso` are captured.
-const FILE_EXT =
-  '(?:syso|exe|go|ts|tsx|js|jsx|json|css|html?|py|rs|toml|ya?ml|md|txt|conf|ini|cfg|c|h|cpp|java|sql|png|jpe?g|svg|bat|ps1|sh|dll|a|lib|so|zip)'
-const FILE_RE = new RegExp(`[\\w@./*\\\\-]+\\.${FILE_EXT}`, 'g')
-
-interface FileHit {
-  path: string
-  count: number
-  tools: string[]
-}
-
-function collectFiles(messages: Message[]): FileHit[] {
-  const hits = new Map<string, FileHit>()
-  for (const m of messages) {
-    for (const tool of m.tools ?? []) {
-      const text = `${tool.args} ${tool.result ?? ''}`
-      for (const raw of text.match(FILE_RE) ?? []) {
-        const path = raw.replace(/^\.\//, '').trim()
-        if (!path) continue
-        const hit = hits.get(path) ?? { path, count: 0, tools: [] }
-        hit.count += 1
-        if (!hit.tools.includes(tool.name)) hit.tools.push(tool.name)
-        hits.set(path, hit)
-      }
-    }
-  }
-  return [...hits.values()].sort((a, b) => b.count - a.count)
-}
-
 interface ChangeItem {
   tool: ToolCall
   messageId: string
@@ -98,6 +68,114 @@ function TabIcon({ id }: { id: InspectorTab }) {
   return <GitCompare size={13} />
 }
 
+/** Parent of a path: drop the last segment; stops at a drive root (`D:\`) or filesystem root (`/`). */
+function parentPath(path: string): string {
+  const norm = path.replace(/[\\/]+$/, '')
+  const idx = Math.max(norm.lastIndexOf('/'), norm.lastIndexOf('\\'))
+  if (idx <= 1) return path.replace(/[\\/]+$/, '') === '' ? path : norm.slice(0, idx + 1)
+  return norm.slice(0, idx)
+}
+
+/** Breadcrumb chain of a path: `D:\a\b` → [`D:\`, `D:\a`, `D:\a\b`]. */
+function breadcrumbs(path: string): string[] {
+  const parts: string[] = []
+  let cur = path
+  for (;;) {
+    parts.unshift(cur)
+    const parent = parentPath(cur)
+    if (parent === cur) break
+    cur = parent
+  }
+  return parts
+}
+
+interface FileBrowserState {
+  path?: string
+  listing: FileEntry[] | null
+  loading: boolean
+  error: string | null
+}
+
+function FileBrowser({ root }: { root?: string }) {
+  const listFiles = useStore(s => s.listFiles)
+  const [state, setState] = useState<FileBrowserState>({ path: root, listing: null, loading: true, error: null })
+
+  // Re-root when the active session changes.
+  useEffect(() => {
+    setState({ path: root, listing: null, loading: true, error: null })
+  }, [root])
+
+  useEffect(() => {
+    let cancelled = false
+    setState(s => ({ ...s, loading: true, error: null }))
+    listFiles(state.path)
+      .then((l) => {
+        if (!cancelled) setState({ path: l.path, listing: l.entries, loading: false, error: null })
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setState(s => ({ ...s, loading: false, error: e instanceof Error ? e.message : String(e) }))
+      })
+    return () => { cancelled = true }
+  }, [state.path, listFiles])
+
+  const crumbs = state.path ? breadcrumbs(state.path) : []
+  const parent = state.path ? parentPath(state.path) : undefined
+
+  if (state.loading && !state.listing) {
+    return <div className="inspector-empty"><Loader2 size={20} className="spin" /><span>加载目录…</span></div>
+  }
+  if (state.error && !state.listing) {
+    return <div className="inspector-empty"><span>无法读取目录：{state.error}</span></div>
+  }
+
+  return (
+    <div className="inspector-files">
+      <div className="inspector-files__head">
+        {parent && (
+          <button className="inspector-files__up" title="上级目录" onClick={() => setState({ path: parent, listing: null, loading: true, error: null })}>
+            <FolderUp size={13} />
+          </button>
+        )}
+        <div className="inspector-files__crumbs">
+          {crumbs.map((c, i) => (
+            <span key={c}>
+              {i > 0 && <ChevronRight size={10} className="inspector-files__crumb-sep" />}
+              <button
+                className="inspector-files__crumb"
+                title={c}
+                onClick={() => setState({ path: c, listing: null, loading: true, error: null })}
+              >
+                {i === 0 ? <Home size={10} /> : c === state.path ? <span className="inspector-files__crumb-current">{i === crumbs.length - 1 ? c.split(/[\\/]/).pop() : c}</span> : c.split(/[\\/]/).pop()}
+              </button>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {state.loading && <div className="inspector-files__status"><Loader2 size={12} className="spin" /> 加载中…</div>}
+      {state.error && <div className="inspector-files__status">读取失败：{state.error}</div>}
+
+      {state.listing && state.listing.length === 0 && !state.loading && (
+        <div className="inspector-empty"><FolderOpen size={22} /><span>空目录</span></div>
+      )}
+
+      <div className="inspector-files__list">
+        {state.listing?.map(f => (
+          <button
+            key={f.path}
+            className={`inspector-file ${f.isDirectory ? 'inspector-file--dir' : ''}`}
+            onClick={() => { if (f.isDirectory) setState({ path: f.path, listing: null, loading: true, error: null }) }}
+            title={f.path}
+          >
+            {f.isDirectory ? <Folder size={13} className="inspector-file__icon" /> : <FileText size={13} className="inspector-file__icon" />}
+            <span className="inspector-file__path">{f.name}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function Inspector() {
   const open = useStore(s => s.inspectorOpen)
   const tab = useStore(s => s.inspectorTab)
@@ -106,11 +184,13 @@ export function Inspector() {
   const metrics = useStore(s => s.metrics)
   const tokenUsage = useStore(s => s.tokenUsage)
   const messages = useStore(s => s.messages)
+  const sessions = useStore(s => s.sessions)
+  const activeSessionId = useStore(s => s.activeSessionId)
   const [selectedChange, setSelectedChange] = useState<string | null>(null)
 
-  const files = useMemo(() => collectFiles(messages), [messages])
   const changes = useMemo(() => collectChanges(messages), [messages])
   const activeChange = changes.find(c => c.tool.id === selectedChange) ?? null
+  const activeSession = sessions.find(s => s.id === activeSessionId)
 
   const totalSource = tokenUsage.bySource.reduce((n, s) => n + s.tokens, 0)
   const totalType = tokenUsage.byType.reduce((n, s) => n + s.tokens, 0)
@@ -232,26 +312,16 @@ export function Inspector() {
         )}
 
         {tab === 'files' && (
-          files.length === 0 ? (
-            <div className="inspector-empty">
-              <FolderOpen size={28} />
-              <span>当前会话暂无文件操作</span>
+          <>
+            <div className="inspector-files__root">
+              <FolderOpen size={12} />
+              <span title={activeSession?.cwd ?? '未设置工作目录'}>
+                {activeSession ? (activeSession.projectName === '未分组' && activeSession.cwd ? activeSession.cwd.split(/[\\/]/).pop() : activeSession.projectName) : '未选择会话'}
+                {activeSession?.cwd && <span className="inspector-files__root-cwd">{activeSession.cwd}</span>}
+              </span>
             </div>
-          ) : (
-            <div className="inspector-file-list">
-              {files.map(f => (
-                <div key={f.path} className="inspector-file">
-                  <FileText size={13} className="inspector-file__icon" />
-                  <div className="inspector-file__main">
-                    <div className="inspector-file__path">{f.path}</div>
-                    <div className="inspector-file__meta">
-                      {f.count} 次 · {f.tools.join(' / ')}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
+            <FileBrowser root={activeSession?.cwd} />
+          </>
         )}
 
         {tab === 'changes' && (

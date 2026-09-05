@@ -32,6 +32,28 @@ export interface DirectoryListing {
   truncated: boolean
 }
 
+/** One row of a `host.listFiles` listing: a directory or a regular file. */
+export interface FileEntry {
+  /** Base name shown in a browser row. */
+  name: string
+  /** Absolute host path — the client never joins path segments itself. */
+  path: string
+  /** Hidden by the host platform's convention (dot-prefixed on POSIX); the client owns whether to show it. */
+  hidden: boolean
+  /** Dirent says directory (enterable); false for plain files. */
+  isDirectory: boolean
+}
+
+/** host.listFiles response value: one directory level, directories first. */
+export interface FileListing {
+  /** Absolute path of the listed directory. */
+  path: string
+  /** Direct children, name-sorted within directories-first ordering; symlinks to directories included as directories. */
+  entries: FileEntry[]
+  /** True when the backend cut `entries` at its complete-result bound. */
+  truncated: boolean
+}
+
 /** Host-level unary methods. */
 export interface HostApi {
   /**
@@ -82,6 +104,17 @@ export interface HostApi {
   createDirectory(
     request: RpcRequest<{ path: string; name: string }>,
   ): Promise<RpcResponse<{ path: string }>>
+
+  /**
+   * List one directory level with both directories and plain files, for a
+   * project-file browser. Served regardless of the composed picker capability
+   * (it is a plain host filesystem read, not a chooser interaction); an
+   * absent path lists the host account's home directory. Unreadable or
+   * missing targets fail with `directory-unreadable`.
+   */
+  listFiles(
+    request: RpcRequest<{ path?: string }>,
+  ): Promise<RpcResponse<FileListing>>
 
   /**
    * Open a filesystem path with the operating system's default application

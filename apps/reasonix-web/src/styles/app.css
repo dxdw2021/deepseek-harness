@@ -1401,6 +1401,116 @@
   color: var(--text-faint);
 }
 
+/* Files tab · project file browser */
+.inspector-files__root {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg-elev);
+}
+.inspector-files__root-cwd {
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.inspector-files__head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.inspector-files__up {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.inspector-files__up:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.inspector-files__crumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.inspector-files__crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+  border-radius: var(--radius-sm);
+  padding: 1px 3px;
+  cursor: pointer;
+}
+.inspector-files__crumb:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.inspector-files__crumb-current {
+  color: var(--text);
+}
+.inspector-files__crumb-sep {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.inspector-files__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.inspector-files__list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.inspector-files__list .inspector-file {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.inspector-files__list .inspector-file:hover {
+  background: var(--bg-hover);
+}
+.inspector-files__list .inspector-file--dir .inspector-file__path {
+  color: var(--text);
+}
+.inspector-files__list .inspector-file__icon {
+  margin-top: 0;
+  color: var(--text-faint);
+}
+.inspector-files__list .inspector-file--dir .inspector-file__icon {
+  color: var(--accent);
+}
+
 /* Changes tab */
 .inspector-change-list {
   display: flex;

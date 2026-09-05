@@ -4,7 +4,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { mkdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -677,6 +677,20 @@ function directoryError(error: unknown): RpcError {
     return { code: error.code, message: error.message, details: { path: error.path } }
   }
   return { code: 'internal', message: error instanceof Error ? error.message : String(error), details: {} }
+}
+
+/**
+ * Whether a path is fully qualified on this host: POSIX-absolute on POSIX,
+ * drive-qualified or complete UNC on Windows (mirrors the browse seam's
+ * rule — a rooted drive-less form resolves against the process cwd, which a
+ * host filesystem read must never do silently).
+ * @param path - candidate path.
+ * @returns whether the path names one fixed filesystem location.
+ */
+function isFullyQualifiedPath(path: string): boolean {
+  return process.platform === 'win32'
+    ? /^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/]+[^\\/]+)/.test(path)
+    : path.startsWith('/')
 }
 
 /** Resolved Agent model and project-directory defaults consumed by the API implementation. */
@@ -3054,6 +3068,44 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
 
       async openPath(request, signal) {
         return openPath(request, request.payload.path, signal)
+      },
+
+      /**
+       * One-level directory+file listing for the project-file browser. Unlike
+       * the chooser-backed methods this is a plain host filesystem read, so
+       * it serves under any composed picker capability. Synchronous per level:
+       * a level is at most a few thousand dirents and the read is a single
+       * syscall batch, so the default unary timeout leaves ample headroom and
+       * there is nothing to abort mid-flight.
+       */
+      async listFiles(request) {
+        const target = request.payload.path === undefined ? homedir() : request.payload.path
+        if (!isFullyQualifiedPath(target)) {
+          return err(request, {
+            code: 'directory-unreadable',
+            message: `cannot list "${target}": not a fully qualified path`,
+            details: { path: target },
+          })
+        }
+        try {
+          const dirents = readdirSync(target, { withFileTypes: true })
+          const rows = dirents.map(d => ({
+            name: d.name,
+            path: join(target, d.name),
+            hidden: d.name.startsWith('.'),
+            isDirectory: d.isDirectory(),
+          }))
+          rows.sort((a, b) =>
+            a.isDirectory === b.isDirectory
+              ? a.name.localeCompare(b.name)
+              : a.isDirectory
+                ? -1
+                : 1,
+          )
+          return ok(request, { path: target, entries: rows, truncated: false })
+        } catch (error: unknown) {
+          return err(request, directoryError(error))
+        }
       },
     },
 
