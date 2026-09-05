@@ -111,15 +111,19 @@ if (dshRunning) {
 } else {
   console.log(`[dev] 🚀 启动 dsh web (端口 ${DSH_PORT})...`)
 
-  // 清理可能损坏的 profiles（使用开发版独立 DSH_HOME）
+  // 开发版独立 DSH_HOME。首启需冷初始化 profiles（Windows junction 冷启动可达
+  // 数十秒），因此不在此处清空缓存——只有显式 `--reset-profiles` 才清理，
+  // 否则每次 dev 都会退化回冷启动并轻易超过就绪等待。
   const devDshHome = join(process.env.USERPROFILE || process.env.HOME || '', '.dsh-dev')
-  const profilesDir = join(devDshHome, 'profiles')
-  const nodeModulesDir = join(profilesDir, 'node_modules')
-  if (existsSync(nodeModulesDir)) {
-    console.log('[dev] 清理损坏的 profiles/node_modules...')
-    const { rmSync } = await import('fs')
-    rmSync(nodeModulesDir, { recursive: true, force: true })
-    console.log('[dev] 已清理')
+  if (args.includes('--reset-profiles')) {
+    const profilesDir = join(devDshHome, 'profiles')
+    const nodeModulesDir = join(profilesDir, 'node_modules')
+    if (existsSync(nodeModulesDir)) {
+      console.log('[dev] 清理 profiles/node_modules...')
+      const { rmSync } = await import('fs')
+      rmSync(nodeModulesDir, { recursive: true, force: true })
+      console.log('[dev] 已清理')
+    }
   }
 
   // Source-launch the CLI exactly like `pnpm dsh` (tsx ESM hook): the built
@@ -134,7 +138,7 @@ if (dshRunning) {
       ...process.env,
       NODE_ENV: 'development',
       // 开发版使用独立 DSH_HOME，与安装版完全隔离
-      DSH_HOME: join(process.env.USERPROFILE || process.env.HOME || '', '.dsh-dev'),
+      DSH_HOME: devDshHome,
     }
   })
 
@@ -150,9 +154,10 @@ if (dshRunning) {
     }
   })
 
-  // 等待启动或检测失败
+  // 等待启动或检测失败。冷启动（首次 profiles 初始化）需要更久，超时放宽到
+  // 90 秒；仍失败时给出可重试的提示（第二次为热启动，通常数秒即就绪）。
   const started = await Promise.race([
-    waitForDshWeb(DSH_PORT, 20000).then(ok => ok ? 'success' : 'timeout'),
+    waitForDshWeb(DSH_PORT, 90000).then(ok => ok ? 'success' : 'timeout'),
     new Promise(resolve => {
       dshProcess.on('exit', (code) => resolve(`exit:${code}`))
     })
