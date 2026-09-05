@@ -8,6 +8,10 @@ import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import { MaxRetriesRow } from '../src/client/MaxRetriesRow.tsx'
 import type { MaxRetriesRowComponentProps } from '../src/client/MaxRetriesRow.tsx'
 import { createMaxRetriesStore } from '../src/client/store.ts'
+// Type-only: pulls the package's LocaleNamespaceMap augmentation (settings.model-request)
+// into this program; without it PropsLocale resolves `t` to absent and the props
+// literal below fails to compile. Mirrors ui-theme's tests.
+import type {} from '../src/client/index.ts'
 
 afterEach(cleanup)
 

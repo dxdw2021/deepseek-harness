@@ -1,28 +1,49 @@
 {
   "name": "@deepseek-ai/dsh-context-engine-v2",
+  "description": "Standing instructions and background memory store for agents with compaction integration (ctx.contextEngineV2)",
   "version": "0.1.0-rc.5",
-  "license": "MIT",
-  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/context/context-engine-v2"
+  },
   "type": "module",
   "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "types": "lib/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/index.d.ts",
+      "types": "./lib/types/index.d.ts",
       "import": "./lib/index.js"
     }
   },
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.d.ts"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf lib"
   },
+  "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-settings": "workspace:^",
-    "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^"
   },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-compaction": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-settings": "workspace:^"
+  },
   "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-compaction": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
+    "@deepseek-ai/dsh-settings": "workspace:^",
     "@types/node": "^22.20.0",
     "typescript": "^6.0.3"
   }

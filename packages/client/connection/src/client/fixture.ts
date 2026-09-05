@@ -2965,6 +2965,9 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       // already-configured branch of the login action.
       importOpencodeCredential: request => ok(request, { imported: false, alreadyPresent: true }),
     },
+    audio: {
+      transcribe: request => ok(request, { text: '（fixture 语音识别结果）', model: 'fixture', durationMs: 0 }),
+    },
     respond(message: ClientResponse): Promise<RpcReceipt> {
       // Same routing discipline as the host: rpcId first, then the payload's
       // audit correlation; a settled or unknown id is not-pending.
@@ -3133,6 +3136,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'llm.models': return this.api.llm.models(request)
       case 'llm.discoverModels': return this.api.llm.discoverModels(request, signal)
       case 'llm.importOpencodeCredential': return this.api.llm.importOpencodeCredential(request, signal)
+      case 'audio.transcribe': return this.api.audio.transcribe(request)
     }
   }
 

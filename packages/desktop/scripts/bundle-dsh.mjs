@@ -129,7 +129,7 @@ function main() {
     '--filter', DEPLOY_ROOT_PACKAGE,
     'deploy', '--legacy', '--prod',
     '--config.node-linker=hoisted',
-    '--config.auto-install-peers=false',
+    '--config.auto-install-peers=true',
     '--config.link-workspace-packages=true',
     DEST_DIR,
   ], { cwd: REPO_ROOT })

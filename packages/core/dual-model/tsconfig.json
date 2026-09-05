@@ -21,6 +21,9 @@
       "path": "../../settings/settings"
     },
     {
+      "path": "../../llm/llm"
+    },
+    {
       "path": "../execution-mode"
     },
     {

@@ -7,14 +7,32 @@
  * - Platform-specific adaptations
  */
 
-import { BrowserWindow, screen, session } from 'electron'
+import { BrowserWindow, screen } from 'electron'
 import { join, dirname } from 'path'
+import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import Store from 'electron-store'
 
 /** __dirname equivalent for ES modules */
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+
+/** Sidebar state for persistence */
+interface SidebarState {
+  visible: boolean
+  width: number
+  activeTab: 'files' | 'changed'
+}
+
+/** Persistent store for sidebar state */
+const sidebarStore = new Store<SidebarState>({
+  name: 'sidebar-state',
+  defaults: {
+    visible: false,
+    width: 320,
+    activeTab: 'files',
+  },
+})
 
 /** Window state for persistence */
 interface WindowState {
@@ -40,6 +58,20 @@ const windowStore = new Store<WindowState>({
  */
 export function getWindowState(): WindowState {
   return windowStore.store
+}
+
+/**
+ * Get sidebar state.
+ */
+export function getSidebarState(): SidebarState {
+  return sidebarStore.store
+}
+
+/**
+ * Save sidebar state.
+ */
+export function setSidebarState(state: Partial<SidebarState>): void {
+  sidebarStore.set(state)
 }
 
 /**
@@ -218,6 +250,25 @@ export function createMainWindow(port: number, initialUrl?: string): BrowserWind
         ],
       },
     })
+  })
+
+  // Inject sidebar script into the web page after it finishes loading.
+  // The script creates a toggle button (◀) on the right edge that opens
+  // a Files / Changes panel powered by the preload IPC bridge.
+  function injectSidebar(): void {
+    try {
+      const injectPath = join(__dirname, '../../resources/sidebar-inject.js')
+      const injectCode = readFileSync(injectPath, 'utf-8')
+      void win.webContents.executeJavaScript(injectCode).catch(() => {})
+    } catch (err) {
+      console.error('[dsh-desktop] Failed to inject sidebar:', err)
+    }
+  }
+
+  win.webContents.on('did-finish-load', injectSidebar)
+  // Also re-inject after in-page navigations (SPA route changes)
+  win.webContents.on('did-navigate-in-page', (_event, _url, isMainFrame) => {
+    if (isMainFrame) injectSidebar()
   })
 
   return win

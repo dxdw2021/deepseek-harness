@@ -1,9 +1,11 @@
 /**
- * Permission Management UI plugin, browser half — registers the Permission
- * Management settings section for managing permission rules and audit logs.
+ * Permission Management UI plugin, host half. The browser half ships the
+ * Permission Management settings section through exports["client"]; this entry
+ * exists so the plugin appears in the host Loader tree like every sibling
+ * surface plugin.
  *
  * @module @deepseek-ai/dsh-client-ui-permission-management
  */
 
-// Node-half stub: all real work lives in src/client/index.ts
-export {}
+/** Host plugin body — no host-side behavior for this surface plugin. */
+export function apply(): void {}

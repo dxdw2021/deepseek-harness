@@ -18,6 +18,12 @@
       "path": "../../../vendor/schemastery"
     },
     {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../compaction/compaction"
+    },
+    {
       "path": "../../settings/settings"
     },
     {

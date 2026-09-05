@@ -16,7 +16,13 @@ function isBuildFaceClient(value: unknown): boolean {
 export default defineConfig(({ env }) => {
   const client = isBuildFaceClient(env?.DSH_BUILD_FACE)
   return {
-    workspace: ['vendor/*', 'packages/*/*', 'apps/cli'],
+    workspace: {
+      include: ['vendor/*', 'packages/*/*', 'apps/cli'],
+      // packages/desktop is the Electron app shell: it builds through its own
+      // tsc -> electron-builder flow (dist/, not lib/) and has no host-project
+      // lib/types to bundle, so it must not join the workspace lib scan.
+      exclude: ['packages/desktop'],
+    },
     entry: client ? '' : ['lib/types/{index,invariant,startup}.js'],
     outDir: 'lib',
     format: ['esm'],

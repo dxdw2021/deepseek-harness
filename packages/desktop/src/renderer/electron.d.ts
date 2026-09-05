@@ -33,6 +33,12 @@ interface ElectronAPI {
     getVersion: () => Promise<string>
     /** Get platform (darwin, win32, linux) */
     getPlatform: () => Promise<string>
+    /** List files in a directory for @file reference */
+    listFiles: (dirPath: string) => Promise<{
+      success: boolean
+      files: Array<{ name: string; path: string; isDir: boolean }>
+      error?: string
+    }>
   }
 
   /** Auto updater operations */

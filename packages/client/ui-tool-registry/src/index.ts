@@ -1,9 +1,10 @@
 /**
- * Tool Registry UI plugin, browser half — registers the Tool Registry
- * settings section for managing tools and their configurations.
+ * Tool Registry UI plugin, host half. The browser half ships the Tool Registry
+ * settings section through exports["client"]; this entry exists so the
+ * plugin appears in the host Loader tree like every sibling surface plugin.
  *
  * @module @deepseek-ai/dsh-client-ui-tool-registry
  */
 
-// Node-half stub: all real work lives in src/client/index.ts
-export {}
+/** Host plugin body — no host-side behavior for this surface plugin. */
+export function apply(): void {}

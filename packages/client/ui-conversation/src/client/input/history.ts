@@ -33,7 +33,7 @@ export class PromptHistory {
     } else {
       return null
     }
-    return this.entries[this.index]
+    return this.entries[this.index] ?? null
   }
 
   /**
@@ -49,6 +49,6 @@ export class PromptHistory {
       return this.pending
     }
     this.index -= 1
-    return this.entries[this.index]
+    return this.entries[this.index] ?? null
   }
 }

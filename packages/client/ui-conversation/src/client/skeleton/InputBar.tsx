@@ -285,8 +285,22 @@ export function InputBar({
     // oxlint-disable-next-line typescript/no-deprecated
     const composing = composingRef.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      if (keyboard.arbitrate(e.key === 'ArrowUp' ? 'up' : 'down', composing) === 'consumed') e.preventDefault()
-      return
+      if (composing) return
+      const result = keyboard.arbitrate(e.key === 'ArrowUp' ? 'up' : 'down', composing)
+      if (result === 'consumed') {
+        e.preventDefault()
+        return
+      }
+      const draft = e.key === 'ArrowUp'
+        ? keyboard.promptHistoryUp()
+        : keyboard.promptHistoryDown()
+      if (draft !== null) {
+        e.preventDefault()
+        const cur = keyboard.snapshot.draft
+        keyboard.setDraft(draft, { start: 0, end: cur.length, insertedLength: draft.length })
+        keyboard.track(draft, draft.length)
+        return
+      }
     }
     if (e.key === 'Escape') {
       // Escape layering: an open overlay closes; claimed without an overlay

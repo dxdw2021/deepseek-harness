@@ -21,13 +21,22 @@ const desktopAPI = {
     maximize: () => ipcRenderer.invoke('window:maximize'),
     close: () => ipcRenderer.invoke('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
-    onMaximizeChange: (callback: (maximized: boolean) => void) => {
-      const handler = (_event: any, maximized: boolean) => {
+    onMaximizeChange: (callback) => {
+      const handler = (_event, maximized) => {
         callback(maximized)
       }
       ipcRenderer.on('window:maximize-change', handler)
       return () => ipcRenderer.removeListener('window:maximize-change', handler)
     },
+  },
+
+  // Sidebar control
+  sidebarControl: {
+    toggle: workspacePath => ipcRenderer.invoke('sidebar:toggle', workspacePath),
+    hide: () => ipcRenderer.invoke('sidebar:hide'),
+    resize: width => ipcRenderer.invoke('sidebar:resize', width),
+    getState: () => ipcRenderer.invoke('sidebar:get-state'),
+    setState: state => ipcRenderer.invoke('sidebar:set-state', state),
   },
 
   // App actions
@@ -37,6 +46,7 @@ const desktopAPI = {
     openSettings: () => ipcRenderer.invoke('app:open-settings'),
     getVersion: () => ipcRenderer.invoke('app:get-version'),
     getPlatform: () => ipcRenderer.invoke('app:get-platform'),
+    listFiles: dirPath => ipcRenderer.invoke('app:list-files', dirPath),
   },
 
   // Auto updater
@@ -44,14 +54,14 @@ const desktopAPI = {
     checkForUpdates: () => ipcRenderer.invoke('updater:check'),
     downloadUpdate: () => ipcRenderer.invoke('updater:download'),
     installUpdate: () => ipcRenderer.invoke('updater:install'),
-    onUpdateAvailable: (callback: (info: { version: string }) => void) => {
-      const handler = (_event: any, info: { version: string }) => {
+    onUpdateAvailable: (callback) => {
+      const handler = (_event, info) => {
         callback(info)
       }
       ipcRenderer.on('update:available', handler)
       return () => ipcRenderer.removeListener('update:available', handler)
     },
-    onUpdateDownloaded: (callback: () => void) => {
+    onUpdateDownloaded: (callback) => {
       const handler = () => callback()
       ipcRenderer.on('update:downloaded', handler)
       return () => ipcRenderer.removeListener('update:downloaded', handler)
@@ -60,21 +70,32 @@ const desktopAPI = {
 
   // Menu events (from native menu to renderer)
   menu: {
-    onNewSession: (callback: () => void) => {
+    onNewSession: (callback) => {
       const handler = () => callback()
       ipcRenderer.on('menu:new-session', handler)
       return () => ipcRenderer.removeListener('menu:new-session', handler)
     },
-    onOpenWorkspace: (callback: () => void) => {
+    onOpenWorkspace: (callback) => {
       const handler = () => callback()
       ipcRenderer.on('menu:open-workspace', handler)
       return () => ipcRenderer.removeListener('menu:open-workspace', handler)
     },
-    onOpenSettings: (callback: () => void) => {
+    onOpenSettings: (callback) => {
       const handler = () => callback()
       ipcRenderer.on('menu:open-settings', handler)
       return () => ipcRenderer.removeListener('menu:open-settings', handler)
     },
+  },
+
+  // Sidebar panel - file operations for artifacts and change tracking
+  sidebar: {
+    getWorkspace: () => ipcRenderer.invoke('sidebar:get-workspace'),
+    getActiveSessionCwd: () => ipcRenderer.invoke('sidebar:get-active-session-cwd'),
+    listProducedFiles: dirPath => ipcRenderer.invoke('sidebar:list-produced-files', dirPath),
+    listChangedFiles: workspacePath => ipcRenderer.invoke('sidebar:list-changed-files', workspacePath),
+    getFileContent: filePath => ipcRenderer.invoke('sidebar:get-file-content', filePath),
+    getFileDiff: (workspacePath, filePath) => ipcRenderer.invoke('sidebar:get-file-diff', workspacePath, filePath),
+    pickFolder: () => ipcRenderer.invoke('sidebar:pick-folder'),
   },
 }
 

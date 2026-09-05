@@ -18,7 +18,7 @@ import { MODEL_SETTINGS_NAMESPACE, type ModelSettings } from './model-settings.t
 
 export type { LlmRetryEventData, LlmRetryStartedEventData } from './types.ts'
 export type { ModelSettings } from './model-settings.ts'
-export { MODEL_SETTINGS_NAMESPACE } from './model-settings.ts'
+export { MODEL_SETTINGS_NAMESPACE, ModelSettingsSchema } from './model-settings.ts'
 export { RetryId } from './brand.ts'
 
 export const name = 'llm-retry'

@@ -1,9 +1,10 @@
 /**
- * Execution Mode UI plugin, browser half — registers the Execution Mode
- * settings section for switching between Light, Balanced, and Delivery modes.
+ * Execution Mode UI plugin, host half. The browser half ships the Execution
+ * Mode settings section through exports["client"]; this entry exists so the
+ * plugin appears in the host Loader tree like every sibling surface plugin.
  *
  * @module @deepseek-ai/dsh-client-ui-execution-mode
  */
 
-// Node-half stub: all real work lives in src/client/index.ts
-export {}
+/** Host plugin body — no host-side behavior for this surface plugin. */
+export function apply(): void {}

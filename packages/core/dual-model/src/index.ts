@@ -8,6 +8,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ExecutionMode } from '@deepseek-ai/dsh-execution-mode'
 
 /** Model roles in dual model collaboration */
@@ -134,9 +135,65 @@ export interface ExecutionMetrics {
   toolCallCount: number
 }
 
+/**
+ * System prompt sent to the planner model to produce a structured TaskPlan.
+ *
+ * The model must respond with a JSON object whose shape matches
+ * {@link TaskPlan} (minus `id`, which is generated locally).
+ */
+const PLANNING_SYSTEM_PROMPT = `You are a task planning assistant. Given a task description, produce a structured plan as a JSON object.
+
+The JSON object MUST have exactly this shape:
+{
+  "description": "<string: brief task description>",
+  "complexity": "<'low' | 'medium' | 'high'>",
+  "resources": ["<string: resource names>"],
+  "dependencies": { "<step-id>": ["<dependency step-id>"] },
+  "steps": [
+    {
+      "id": "<step-N>",
+      "description": "<what this step does>",
+      "toolCalls": ["<tool name>"],
+      "expectedOutput": "<what this step produces>",
+      "validationCriteria": ["<how to verify this step>"]
+    }
+  ]
+}
+
+Rules:
+- Each step id MUST be "step-1", "step-2", etc. (no gaps).
+- Dependencies reference earlier step ids only.
+- Output ONLY the JSON object, no markdown fences or explanation.`
+
+/**
+ * Assemble the text content from an LLM stream response into a single string.
+ * Drains the stream through a {@link BlockAssembler} and extracts text blocks.
+ * @param ctx - Cordis context carrying the LLM runtime.
+ * @param options - generation request options.
+ * @returns assembled text and token counts.
+ */
+async function assembleStreamText(
+  ctx: Context,
+  options: Parameters<Context['llm']['stream']>[0],
+): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
+  const assembler = new BlockAssembler()
+  for await (const chunk of ctx.llm.stream(options)) assembler.push(chunk)
+  const blocks = assembler.blocks()
+  const text = blocks
+    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+    .map(b => b.text)
+    .join('')
+  const usage = assembler.usage
+  return {
+    text,
+    inputTokens: usage?.inputTokens ?? 0,
+    outputTokens: usage?.outputTokens ?? 0,
+  }
+}
+
 /** Dual model service definition */
 export class DualModelService extends Service {
-  static inject = ['settings', 'executionMode']
+  static inject = ['settings', 'executionMode', 'llm']
 
   private config: DualModelConfig = {
     enabled: false,
@@ -198,50 +255,42 @@ export class DualModelService extends Service {
     return this.config.strategy
   }
 
-  /** Plan a task using the planner model */
+  /** Plan a task using the planner model via the LLM runtime. */
   async planTask(task: string): Promise<TaskPlan> {
     if (!this.config.enabled) {
       throw new Error('Dual model collaboration is disabled')
     }
 
-    // In a real implementation, this would call the planner model
-    // For now, return a mock plan
-    return {
-      id: `plan-${Date.now()}`,
-      description: task,
-      steps: [
-        {
-          id: 'step-1',
-          description: 'Analyze the task requirements',
-          toolCalls: ['read_file', 'grep'],
-          expectedOutput: 'Task analysis document',
-          validationCriteria: ['Requirements identified', 'Constraints documented'],
-        },
-        {
-          id: 'step-2',
-          description: 'Implement the solution',
-          toolCalls: ['write_file', 'edit_file'],
-          expectedOutput: 'Implemented solution',
-          validationCriteria: ['Code compiles', 'Tests pass'],
-        },
-        {
-          id: 'step-3',
-          description: 'Validate the implementation',
-          toolCalls: ['bash'],
-          expectedOutput: 'Validation report',
-          validationCriteria: ['All tests pass', 'Code coverage meets threshold'],
-        },
+    const plannerCfg = this.config.planner
+    const planId = `plan-${Date.now()}`
+
+    const { text: rawJson } = await assembleStreamText(this.ctx, {
+      provider: plannerCfg.provider,
+      model: plannerCfg.model,
+      system: PLANNING_SYSTEM_PROMPT,
+      messages: [
+        createUserMessage({
+          content: [{ type: 'text', text: `Plan this task: ${task}` }],
+          source: { kind: 'plugin', plugin: 'dsh-dual-model' },
+        }),
       ],
-      complexity: 'medium',
-      resources: ['file_system', 'shell'],
-      dependencies: {
-        'step-2': ['step-1'],
-        'step-3': ['step-2'],
-      },
+      temperature: plannerCfg.temperature ?? 0.3,
+      ...plannerCfg.maxTokens !== undefined ? { maxTokens: plannerCfg.maxTokens } : {},
+    })
+
+    const parsed = parsePlanJson(rawJson)
+
+    return {
+      id: planId,
+      description: parsed.description ?? task,
+      steps: parsed.steps ?? [],
+      complexity: parsed.complexity ?? 'medium',
+      resources: parsed.resources ?? [],
+      dependencies: parsed.dependencies ?? {},
     }
   }
 
-  /** Execute a plan using the executor model */
+  /** Execute a plan using the executor model via the LLM runtime. */
   async executePlan(plan: TaskPlan): Promise<ExecutionResult> {
     if (!this.config.enabled) {
       throw new Error('Dual model collaboration is disabled')
@@ -249,11 +298,14 @@ export class DualModelService extends Service {
 
     const startTime = Date.now()
     const stepResults: StepResult[] = []
+    const times: Record<string, number> = {}
+    let executorTokens = 0
 
-    // Execute steps based on strategy
     for (const step of plan.steps) {
-      // Check dependencies
-      const dependencies = plan.dependencies[step.id] || []
+      const stepStart = Date.now()
+
+      // Check dependencies — skip steps whose dependencies did not succeed.
+      const dependencies = plan.dependencies[step.id] ?? []
       const allDependenciesMet = dependencies.every(depId =>
         stepResults.some(result => result.stepId === depId && result.success),
       )
@@ -266,23 +318,61 @@ export class DualModelService extends Service {
           error: 'Dependencies not met',
           toolCalls: [],
         })
+        times[step.id] = Date.now() - stepStart
         continue
       }
 
-      // Execute step (mock implementation)
-      const stepResult: StepResult = {
-        stepId: step.id,
-        success: true,
-        output: `Completed step: ${step.description}`,
-        toolCalls: step.toolCalls.map(tool => ({
-          tool,
-          args: {},
-          result: null,
+      try {
+        const executorCfg = this.config.executor
+        const stepPrompt = [
+          'Execute the following step from a task plan.',
+          '',
+          `Step: ${step.description}`,
+          `Expected output: ${step.expectedOutput}`,
+          `Tool calls needed: ${step.toolCalls.join(', ') || 'none specified'}`,
+          `Validation criteria: ${step.validationCriteria.join('; ')}`,
+          '',
+          'Provide the result of executing this step.',
+        ].join('\n')
+
+        const { text: output, outputTokens } = await assembleStreamText(this.ctx, {
+          provider: executorCfg.provider,
+          model: executorCfg.model,
+          messages: [
+            createUserMessage({
+              content: [{ type: 'text', text: stepPrompt }],
+              source: { kind: 'plugin', plugin: 'dsh-dual-model' },
+            }),
+          ],
+          temperature: executorCfg.temperature ?? 0.7,
+          ...executorCfg.maxTokens !== undefined ? { maxTokens: executorCfg.maxTokens } : {},
+        })
+
+        executorTokens += outputTokens
+
+        stepResults.push({
+          stepId: step.id,
           success: true,
-        })),
+          output,
+          toolCalls: step.toolCalls.map(tool => ({
+            tool,
+            args: {},
+            result: null,
+            success: true,
+          })),
+        })
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
+        stepResults.push({
+          stepId: step.id,
+          success: false,
+          output: '',
+          error: message,
+          toolCalls: [],
+        })
       }
 
-      stepResults.push(stepResult)
+      times[step.id] = Date.now() - stepStart
     }
 
     const totalTime = Date.now() - startTime
@@ -295,14 +385,11 @@ export class DualModelService extends Service {
       evidence: stepResults.map(result => result.output),
       metrics: {
         totalTime,
-        stepTimes: stepResults.reduce((acc, result) => {
-          acc[result.stepId] = totalTime / plan.steps.length
-          return acc
-        }, {} as Record<string, number>),
+        stepTimes: times,
         tokenUsage: {
           planner: 0,
-          executor: 0,
-          total: 0,
+          executor: executorTokens,
+          total: executorTokens,
         },
         toolCallCount: stepResults.reduce((acc, result) => acc + result.toolCalls.length, 0),
       },
@@ -321,6 +408,27 @@ export class DualModelService extends Service {
       default:
         return this.config.executor
     }
+  }
+}
+
+/**
+ * Best-effort parse of a planner model JSON response.
+ * Strips markdown fences and leading/trailing whitespace before parsing.
+ * @param raw - raw text from the planner model.
+ * @returns partial task plan fields parsed from JSON.
+ */
+function parsePlanJson(raw: string): Partial<TaskPlan> {
+  let cleaned = raw.trim()
+  // Strip markdown code fences (```json ... ``` or ``` ... ```)
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+  }
+  try {
+    return JSON.parse(cleaned) as Partial<TaskPlan>
+  } catch {
+    throw new Error(
+      `planner model returned unparseable JSON: ${cleaned.slice(0, 200)}`,
+    )
   }
 }
 
@@ -348,7 +456,7 @@ export function createDualModelPlugin(config: Config = {}): {
 } {
   return {
     name: 'dual-model',
-    inject: ['settings', 'executionMode'],
+    inject: ['settings', 'executionMode', 'llm'],
     apply(ctx) {
       const service = new DualModelService(ctx)
       ctx.dualModel = service

@@ -64,6 +64,7 @@ import {
   credentialsDescribeRequestSchema, credentialsSetRequestSchema, credentialsUnsetRequestSchema,
 } from '../api/credentials.schema.ts'
 import { llmDiscoverModelsRequestSchema, llmImportOpencodeCredentialRequestSchema, llmModelsRequestSchema, llmProvidersRequestSchema } from '../api/llm.schema.ts'
+import { audioTranscribeRequestSchema } from '../api/audio.schema.ts'
 import {
   subagentHistoryRequestSchema,
   subagentInterruptRequestSchema,
@@ -141,6 +142,7 @@ const UNARY_ROUTES: UnaryRoutes = {
   'llm.models': { schema: llmModelsRequestSchema, invoke: (api, r) => api.llm.models(r) },
   'llm.discoverModels': { schema: llmDiscoverModelsRequestSchema, invoke: (api, r, signal) => api.llm.discoverModels(r, signal) },
   'llm.importOpencodeCredential': { schema: llmImportOpencodeCredentialRequestSchema, invoke: (api, r, signal) => api.llm.importOpencodeCredential(r, signal) },
+  'audio.transcribe': { schema: audioTranscribeRequestSchema, invoke: (api, r) => api.audio.transcribe(r) },
 }
 
 /** Route lookup that narrows an arbitrary path segment to a map key (single cast point for the string→key refinement). */

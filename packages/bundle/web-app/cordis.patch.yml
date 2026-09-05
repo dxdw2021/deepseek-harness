@@ -22,15 +22,13 @@
 - id: hmr
   disabled: true
 
-# Full-text session search is opt-in (the base row's `openAt: never`). This
-# restatement keeps the Web values on one ephemeral in-memory index; a
-# deployment enabling content search overrides `openAt` to `first-search` in a
-# later patch layer, which defers the node:sqlite import and in-memory handle
-# to the first search so Node 22 startup stays quiet.
+# Full-text session search is opt-in (the base row's `openAt: never`). The Web
+# skin enables content search: `first-search` defers the node:sqlite import and
+# in-memory handle to the first search so Node 22 startup stays quiet.
 - id: session-query-sqlite
   config:
     path: ':memory:'
-    openAt: never
+    openAt: first-search
 
 - id: tools
   config:
@@ -141,6 +139,19 @@
     # client-side package, which a host-side bundle cannot import.
     - id: client-hmr
       name: '@deepseek-ai/dsh-client-hmr'
+
+    # ── Reasonix feature replication host services ────────────────────────
+
+    - id: permission-system
+      name: '@deepseek-ai/dsh-permission-system'
+
+    # toolRegistry service provider: bot-im-integration (and any tool consumer)
+    # injects it, so it must be mounted before that row can activate.
+    - id: tool-registry
+      name: '@deepseek-ai/dsh-tool-registry'
+
+    - id: bot-im-integration
+      name: '@deepseek-ai/dsh-bot-im-integration'
 
     # ── browser plugin roster (dsh.client rows; node halves are layer-2 hosts) ──
 

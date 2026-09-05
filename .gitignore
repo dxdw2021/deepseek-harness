@@ -45,3 +45,11 @@ worktrees/
 .hooks/
 
 .trae/
+
+# local runtime logs and scratch files
+*.log
+_tmp_upload.png
+build_libhost.txt
+tmp_*.md
+
+packages/desktop/resources/dsh-runtime.zip

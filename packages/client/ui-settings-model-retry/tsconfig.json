@@ -15,6 +15,9 @@
       "path": "../../settings/settings"
     },
     {
+      "path": "../../llm/llm-retry"
+    },
+    {
       "path": "../ui-slots"
     },
     {

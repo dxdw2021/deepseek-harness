@@ -1,13 +1,18 @@
 /**
- * Context Engine v2 for DeepSeek Harness.
- * Provides standing instructions and background memory for agents.
+ * Context Engine v2 for DeepSeek Harness. Maintains a store of standing
+ * instructions, background memory, cross-session references, and feedback
+ * entries. Integrates with the compaction seam to prune stale tool-output
+ * entries and generate summary entries when history is compacted.
  *
  * @module @deepseek-ai/dsh-context-engine-v2
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-compaction/types'
 
 /** Context types */
 export type ContextType = 'instruction' | 'memory' | 'reference' | 'feedback'
@@ -42,6 +47,12 @@ export interface ContextEntry {
   priority: number
   /** Tags for categorization */
   tags: string[]
+  /**
+   * Session event seqs this entry is derived from or references.
+   * Used by compaction integration to prune stale entries when the
+   * underlying history is compacted.
+   */
+  sourceEventSeqs?: number[]
 }
 
 /** Context search result */
@@ -108,7 +119,7 @@ export class ContextEngineV2Service extends Service {
       this.removeOldestEntry()
     }
 
-    const id = `ctx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    const id = `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
     const now = new Date()
 
     const newEntry: ContextEntry = {
@@ -349,6 +360,113 @@ export class ContextEngineV2Service extends Service {
   getTotalTokenCount(): number {
     return this.calculateTokenCount(Array.from(this.entries.values()))
   }
+
+  // ── Compaction integration ──────────────────────────────────────────
+
+  /**
+   * Generate a summary entry from a compaction summary event and prune
+   * entries whose source event seqs overlap the compacted range.
+   *
+   * Called by the plugin's `session/event` listener when a
+   * `compaction/summary` event arrives.
+   *
+   * @param summary - the summary content blocks produced by the backend.
+   * @param shadowedSeqs - seqs of all surface nodes replaced by the compaction.
+   * @param provider - the provider route that wrote the summary.
+   * @param model - the model that produced the summary.
+   * @returns the newly created summary entry, or `undefined` when the engine is disabled.
+   */
+  handleCompactionSummary(
+    summary: ContentBlock[],
+    shadowedSeqs: number[],
+    provider: string,
+    model: string,
+  ): ContextEntry | undefined {
+    if (!this.config.enabled) return undefined
+
+    this.pruneBySourceSeqs(shadowedSeqs)
+
+    const text = summary
+      .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+      .map(block => block.text)
+      .join('\n')
+
+    if (text.length === 0) return undefined
+
+    return this.add({
+      type: 'memory',
+      scope: 'session',
+      activation: 'relevant',
+      content: text,
+      priority: 80,
+      tags: ['compaction-summary'],
+      metadata: {
+        kind: 'compaction-summary',
+        provider,
+        model,
+        shadowedSeqs,
+        shadowedTokenCount: this.estimateTokens(text),
+      },
+    })
+  }
+
+  /**
+   * Prune context entries whose source event seqs overlap the pruned range.
+   * Called by the plugin's `session/event` listener when a `compaction/prune`
+   * event arrives.
+   *
+   * @param shadowedSeqs - seqs of all surface nodes pruned.
+   * @returns the number of entries removed.
+   */
+  handleCompactionPrune(shadowedSeqs: number[]): number {
+    return this.pruneBySourceSeqs(shadowedSeqs)
+  }
+
+  /**
+   * Remove all entries whose {@link ContextEntry.sourceEventSeqs} overlap
+   * the given set. Entries without `sourceEventSeqs` are never pruned by
+   * this method (they are not derived from session history).
+   *
+   * @param seqs - set of event seqs that were compacted or pruned.
+   * @returns the number of entries removed.
+   */
+  pruneBySourceSeqs(seqs: number[]): number {
+    if (seqs.length === 0) return 0
+
+    const seqSet = new Set(seqs)
+    let removed = 0
+
+    for (const [id, entry] of this.entries) {
+      if (entry.sourceEventSeqs === undefined) continue
+      const stale = entry.sourceEventSeqs.some(s => seqSet.has(s))
+      if (stale) {
+        this.entries.delete(id)
+        this.ctx.emit('context-engine-v2/entry-removed', entry)
+        removed++
+      }
+    }
+
+    return removed
+  }
+
+  /**
+   * Extract plain text from a {@link ContentBlock} array, joining text blocks
+   * with newlines. Non-text blocks are skipped.
+   *
+   * @param blocks - content blocks from a compaction summary.
+   * @returns the concatenated text content.
+   */
+  static contentBlocksToText(blocks: ContentBlock[]): string {
+    return blocks
+      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+      .map(b => b.text)
+      .join('\n')
+  }
+
+  /** Rough token estimator: ~4 chars per token. */
+  private estimateTokens(text: string): number {
+    return Math.ceil(text.length / 4)
+  }
 }
 
 /** Plugin configuration */
@@ -392,6 +510,29 @@ export function createContextEngineV2Plugin(config: Config = {}): {
       if (Object.keys(config).length > 0) {
         service.updateConfig(config)
       }
+
+      // Listen for compaction events via the session/event firehose.
+      ctx.effect(() => {
+        const off = ctx.on('session/event', (_session, event: SessionEvent) => {
+          switch (event.type) {
+            case 'compaction/summary':
+              service.handleCompactionSummary(
+                event.data.summary,
+                event.data.shadowedSeqs,
+                event.data.provider,
+                event.data.model,
+              )
+              break
+            case 'compaction/prune':
+              service.handleCompactionPrune(event.data.shadowedSeqs)
+              break
+            default:
+              break
+          }
+        })
+
+        return () => { off() }
+      })
 
       // Register settings section
       ctx.effect(() => {

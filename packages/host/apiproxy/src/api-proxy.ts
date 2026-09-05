@@ -111,6 +111,7 @@ import {
   inspectApiRemoteSession,
 } from '@deepseek-ai/dsh-api-remotes'
 import { canOpenNativePath, openNativePath, openNativeTextFile } from './native-path-opener.ts'
+import { transcribePcm } from './audio-transcriber.ts'
 
 /** Page size when history is called without maxMessages. */
 const DEFAULT_MAX_MESSAGES = 50
@@ -127,6 +128,11 @@ const DEFAULT_MAX_MESSAGES = 50
  */
 const WEB_SETTINGS_NAMESPACES = [
   'agent-loop', 'shell', 'locale', 'permission', 'ui-conversation', 'ui-theme', 'web-search-deepseek',
+  // The Model Requests settings row (default max model-request retries) owns
+  // the `model` namespace; without it here the browser never receives the
+  // value (empty input) and `mutate` returns `settings-not-exposed` (no
+  // persistence).
+  'model',
 ] as const
 
 /** Provider work budget: at most 100 calls and 2,000 inspected hits. */
@@ -147,6 +153,20 @@ function decodeBase64(data: string): Uint8Array {
     throw new AttachmentError('Image upload is not canonical base64.', 'INVALID_IMAGE_BASE64')
   }
   return new Uint8Array(decoded)
+}
+
+/** Decode base64 16-bit little-endian mono PCM into normalized float samples. */
+function decodePcm16(data: string): Float32Array {
+  const decoded = Buffer.from(data, 'base64')
+  if (decoded.length === 0 || decoded.length % 2 !== 0) {
+    throw new Error('audio payload is not an even-length 16-bit PCM buffer')
+  }
+  const n = decoded.length / 2
+  const out = new Float32Array(n)
+  for (let i = 0; i < n; i++) {
+    out[i] = decoded.readInt16LE(i * 2) / 32768
+  }
+  return out
 }
 
 /** Validate one prompt as a batch before publishing any durable image object. */
@@ -3475,6 +3495,26 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         if (current !== undefined) return ok(request, { imported: false, alreadyPresent: true })
         await credentials.set(ref, secret)
         return ok(request, { imported: true, alreadyPresent: false })
+      },
+    },
+
+    audio: {
+      async transcribe(request) {
+        const { audio, sampleRate } = request.payload
+        try {
+          const pcm = decodePcm16(audio)
+          const result = await transcribePcm(pcm, sampleRate)
+          return ok(request, result)
+        } catch (error: unknown) {
+          // Local STT is a best-effort capability: model download, WASM init,
+          // or recognition failures are all the user's next move, not a
+          // transport fault.
+          return err(request, {
+            code: 'internal',
+            message: error instanceof Error ? error.message : String(error),
+            details: {},
+          })
+        }
       },
     },
 

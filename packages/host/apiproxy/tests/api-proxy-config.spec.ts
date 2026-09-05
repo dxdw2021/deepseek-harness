@@ -445,6 +445,26 @@ describe('settings domain', () => {
       .toEqual({ default: 'minimal' })
   })
 
+  it('exposes the model namespace so the max-retries preference persists', async () => {
+    const ctx = await harness()
+    ctx.settings.register(
+      settingsNamespace('model'),
+      z.object({ maxRetries: z.number().min(0).step(1).default(2) }),
+    )
+    const api = createApiProxy(ctx, DEFAULTS)
+
+    // The browser reads the value (otherwise the input renders empty) and
+    // writes it back through `mutate` (otherwise the change is forgotten).
+    expect(expectOk(await api.settings.describe(request({}))).namespaces.map(view => view.ns))
+      .toEqual(['model'])
+    expectOk(await api.settings.mutate(request({
+      ns: 'model',
+      ops: [{ op: 'set', path: ['maxRetries'], value: 5 }],
+    })))
+    expect(ctx.settings.describe().find(view => String(view.ns) === 'model')?.value)
+      .toEqual({ maxRetries: 5 })
+  })
+
   it('refuses even a model-provider namespace once its directory entry is gone', async () => {
     const ctx = await harness({ configurableProviders: false })
     ctx.settings.register(NS, AdapterConfig)

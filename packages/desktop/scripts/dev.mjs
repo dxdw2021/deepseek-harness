@@ -15,7 +15,7 @@
  */
 
 import { spawn } from 'child_process'
-import { existsSync, mkdirSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { createInterface } from 'readline'
@@ -30,7 +30,8 @@ const args = process.argv.slice(2)
 const useExternalDsh = args.includes('--external')
 const debugMode = args.includes('--debug')
 const portArg = args.find((_, i, a) => a[i - 1] === '--port')
-const DSH_PORT = portArg ? parseInt(portArg, 10) : 3080
+// 开发版默认 3081，避免与安装版 3080 冲突
+const DSH_PORT = portArg ? parseInt(portArg, 10) : 3081
 
 /**
  * 检查端口是否被占用
@@ -90,6 +91,14 @@ if (!existsSync(distDir)) {
 /** Step 2: 检测/启动 dsh web */
 let dshProcess = null
 
+// 检测安装版是否在运行（端口 3080）
+const installedRunning = await isDshWebRunning(3080)
+if (installedRunning) {
+  console.log('[dev] ℹ️  检测到安装版 DeepSeek Harness 正在运行 (端口 3080)')
+  console.log('[dev]    开发版将使用端口 3081，两者独立运行互不影响')
+  console.log('')
+}
+
 const dshRunning = await isDshWebRunning(DSH_PORT)
 
 if (dshRunning) {
@@ -102,8 +111,9 @@ if (dshRunning) {
 } else {
   console.log(`[dev] 🚀 启动 dsh web (端口 ${DSH_PORT})...`)
 
-  // 清理可能损坏的 profiles
-  const profilesDir = join(process.env.USERPROFILE || process.env.HOME || '', '.dsh', 'profiles')
+  // 清理可能损坏的 profiles（使用开发版独立 DSH_HOME）
+  const devDshHome = join(process.env.USERPROFILE || process.env.HOME || '', '.dsh-dev')
+  const profilesDir = join(devDshHome, 'profiles')
   const nodeModulesDir = join(profilesDir, 'node_modules')
   if (existsSync(nodeModulesDir)) {
     console.log('[dev] 清理损坏的 profiles/node_modules...')
@@ -119,7 +129,9 @@ if (dshRunning) {
     cwd: REPO_ROOT,
     env: {
       ...process.env,
-      NODE_ENV: 'development'
+      NODE_ENV: 'development',
+      // 开发版使用独立 DSH_HOME，与安装版完全隔离
+      DSH_HOME: join(process.env.USERPROFILE || process.env.HOME || '', '.dsh-dev'),
     }
   })
 
@@ -197,7 +209,27 @@ if (debugMode) {
   console.log('[dev] 🔍 远程调试已启用: chrome://inspect')
 }
 
-const electronPath = join(REPO_ROOT, 'node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/electron.exe')
+// Locate the installed Electron executable. Resolve the installed tree
+// directly instead of trusting the declared version string, which can drift
+// from the version the lockfile actually resolved.
+function findElectronExe(root) {
+  const pnpmDir = join(root, 'node_modules/.pnpm')
+  if (!existsSync(pnpmDir)) return undefined
+  let names
+  try { names = readdirSync(pnpmDir) } catch { return undefined }
+  const exeName = process.platform === 'win32' ? 'electron.exe' : 'electron'
+  for (const name of names.filter((n) => n.startsWith('electron@')).sort().reverse()) {
+    const candidate = join(pnpmDir, name, 'node_modules/electron/dist', exeName)
+    if (existsSync(candidate)) return candidate
+  }
+  return undefined
+}
+
+const electronPath = findElectronExe(ROOT_DIR) ?? findElectronExe(REPO_ROOT)
+if (!electronPath) {
+  console.error('[dev] ❌ electron.exe not found. Run `pnpm install` in the repo root first.')
+  process.exit(1)
+}
 
 const electron = spawn(electronPath, electronArgs, {
   stdio: 'inherit',
@@ -205,6 +237,8 @@ const electron = spawn(electronPath, electronArgs, {
   env: {
     ...process.env,
     NODE_ENV: 'development',
+    DSH_HOME: join(process.env.USERPROFILE || process.env.HOME || '', '.dsh-dev'),
+    DSH_PORT: String(DSH_PORT),
     ELECTRON_ENABLE_LOGGING: '1'
   }
 })

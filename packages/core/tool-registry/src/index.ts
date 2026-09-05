@@ -504,3 +504,18 @@ declare module '@deepseek-ai/cordis' {
 }
 
 export { ToolRegistryService as Service }
+
+/** Cordis plugin name for the namespace exports. */
+export const name = 'tool-registry'
+
+/** Services required before the tool registry can mount. */
+export const inject = ['settings']
+
+/**
+ * Mount the tool registry service, exposing it as `ctx.toolRegistry`.
+ * @param ctx - cordis context.
+ * @param config - plugin configuration.
+ */
+export function apply(ctx: Context, config: Config = {}): void {
+  createToolRegistryPlugin(config).apply(ctx)
+}

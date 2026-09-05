@@ -124,6 +124,10 @@ export interface ComposerKeyboard {
   space(): boolean
   /** Dismiss the popupSelect shell (any interaction outside the box). */
   dismissPopup(): void
+  /** Navigate to the previous submitted draft; null at the oldest entry or empty history. */
+  promptHistoryUp(): string | null
+  /** Navigate to the next entry; null when not navigating or at the bottom (user's current draft). */
+  promptHistoryDown(): string | null
 }
 
 /** One independently addressable row projected from the transient queue snapshot. */

@@ -174,11 +174,13 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     this.revised.clear()
     this.dependents.clear()
     this.hasMore = hasMore
+    // Deduplicate by seq — a torn persistence tail can repeat the same event.
     const sorted = [...entries].sort((left, right) => left.event.seq - right.event.seq)
     for (const entry of sorted) this.inputs.set(entry.event.seq, entry)
-    this.locationIndex.rebuild(sorted)
+    const deduped = [...this.inputs.values()].sort((left, right) => left.event.seq - right.event.seq)
+    this.locationIndex.rebuild(deduped)
     this.timelineDirty = true
-    for (const entry of sorted) this.matchInput(entry)
+    for (const entry of deduped) this.matchInput(entry)
     this.replayDependencies()
     this.revised.clear()
     for (const context of this.contexts.values()) this.dirty.add(context)
@@ -393,7 +395,9 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     const key = conversationContextKey(definition.kind, id)
     let context = this.contexts.get(key)
     if (role === 'start' && context?.start !== undefined) {
-      throw new Error(`conversation Context ${key} received more than one start Match`)
+      // A torn persistence tail can emit duplicate start events for the same
+      // context. Skip the later start rather than crashing the entire window.
+      return 'none'
     }
     if (context === undefined) {
       context = {
@@ -479,8 +483,10 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
             throw new Error(`conversation Context ${key} received inconsistent Definition identity`)
           }
           if (entry.match.role === 'start') {
+            // A torn persistence tail can emit duplicate start events for the
+            // same context. Skip the later start rather than crashing the window.
             if (discoveredStart !== undefined || context.start !== undefined) {
-              throw new Error(`conversation Context ${key} received more than one start Match`)
+              return null
             }
             discoveredStart = entry.match
           }
@@ -489,6 +495,7 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
           this.contextsBySeq.set(entry.match.event.seq, owners)
           return entry.match
         })
+        .filter((entry): entry is ConversationMatch => entry !== null)
         .sort((left, right) => left.event.seq - right.event.seq)
       context.matches = mergeMatches(context.key, additions, context.matches)
       if (discoveredStart !== undefined) {

@@ -10,7 +10,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
-import { MODEL_SETTINGS_NAMESPACE, ModelSettingsSchema } from '../client/model-settings.ts'
+import { MODEL_SETTINGS_NAMESPACE, ModelSettingsSchema } from '@deepseek-ai/dsh-llm-retry'
 
 export function apply(ctx: Context): void {
   ctx.inject(['settings'], (settingsCtx) => {

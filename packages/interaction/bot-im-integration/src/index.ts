@@ -208,7 +208,7 @@ export class BotImIntegrationService extends Service {
           this.ctx.emit('bot-im-integration/message-sent', message.id, response)
           return response
         }
-      } catch (error) {
+      } catch (_error) {
         // Continue with other handlers
       }
     }
@@ -245,7 +245,7 @@ export class BotImIntegrationService extends Service {
           }
           return response
         }
-      } catch (error) {
+      } catch (_error) {
         // Continue with other handlers
       }
     }
@@ -315,73 +315,69 @@ export interface Config {
   enableMessageLogging?: boolean
 }
 
+/** Cordis plugin name for the namespace exports. */
+export const name = 'bot-im-integration'
+
+/** Services required before the bot IM integration can mount. */
+export const inject = ['settings', 'toolRegistry']
+
 /**
- * Create bot IM integration plugin.
+ * Mount the bot IM integration service and register its settings section.
+ * @param ctx - cordis context.
  * @param config - plugin configuration.
- * @returns the Cordis plugin.
  */
-export function createBotImIntegrationPlugin(config: Config = {}): {
-  name: string
-  inject: string[]
-  apply: (ctx: Context) => void
-} {
-  return {
-    name: 'bot-im-integration',
-    inject: ['settings', 'toolRegistry'],
-    apply(ctx) {
-      const service = new BotImIntegrationService(ctx)
-      ctx.botImIntegration = service
+export function apply(ctx: Context, config: Config = {}): void {
+  const service = new BotImIntegrationService(ctx)
+  ctx.botImIntegration = service
 
-      // Apply configuration
-      if (Object.keys(config).length > 0) {
-        service.updateConfig(config)
-      }
-
-      // Register settings section
-      ctx.effect(() => {
-        const scope = ctx.settings.register(
-          settingsNamespace('bot-im-integration'),
-          z.object({
-            enabled: z.boolean().default(true),
-            platforms: z.array(z.union([
-              z.const('feishu'),
-              z.const('lark'),
-              z.const('wechat'),
-              z.const('qq'),
-              z.const('telegram'),
-              z.const('slack'),
-              z.const('discord'),
-            ])).default([]),
-            commandPrefix: z.string().default('/'),
-            enableAutoReply: z.boolean().default(true),
-            autoReplyMessage: z.string().default('I received your message.'),
-            maxMessageLength: z.number().min(100).max(10000).default(4096),
-            enableMessageLogging: z.boolean().default(true),
-          }),
-          {
-            base: {
-              enabled: true,
-              platforms: [],
-              commandPrefix: '/',
-              enableAutoReply: true,
-              autoReplyMessage: 'I received your message.',
-              maxMessageLength: 4096,
-              enableMessageLogging: true,
-            },
-          },
-        )
-
-        // Watch for settings changes
-        scope.watch((next) => {
-          service.updateConfig(next)
-        })
-
-        return () => {
-          // Cleanup
-        }
-      })
-    },
+  // Apply configuration
+  if (Object.keys(config).length > 0) {
+    service.updateConfig(config)
   }
+
+  // Register settings section
+  ctx.effect(() => {
+    const scope = ctx.settings.register(
+      settingsNamespace('bot-im-integration'),
+      z.object({
+        enabled: z.boolean().default(true),
+        platforms: z.array(z.union([
+          z.const('feishu'),
+          z.const('lark'),
+          z.const('wechat'),
+          z.const('qq'),
+          z.const('telegram'),
+          z.const('slack'),
+          z.const('discord'),
+        ])).default([]),
+        commandPrefix: z.string().default('/'),
+        enableAutoReply: z.boolean().default(true),
+        autoReplyMessage: z.string().default('I received your message.'),
+        maxMessageLength: z.number().min(100).max(10000).default(4096),
+        enableMessageLogging: z.boolean().default(true),
+      }),
+      {
+        base: {
+          enabled: true,
+          platforms: [],
+          commandPrefix: '/',
+          enableAutoReply: true,
+          autoReplyMessage: 'I received your message.',
+          maxMessageLength: 4096,
+          enableMessageLogging: true,
+        },
+      },
+    )
+
+    // Watch for settings changes
+    scope.watch((next) => {
+      service.updateConfig(next)
+    })
+
+    return () => {
+      // Cleanup
+    }
+  })
 }
 
 // Type augmentation for Cordis context

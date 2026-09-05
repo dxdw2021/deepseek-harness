@@ -438,65 +438,61 @@ export interface Config {
   enableRoleBasedAccess?: boolean
 }
 
+/** Cordis plugin name for the namespace exports. */
+export const name = 'permission-system'
+
+/** Services required before the permission system can mount. */
+export const inject = ['settings']
+
 /**
- * Create permission system plugin.
+ * Mount the permission system service and register its settings section.
+ * @param ctx - cordis context.
  * @param config - plugin configuration.
- * @returns the Cordis plugin.
  */
-export function createPermissionSystemPlugin(config: Config = {}): {
-  name: string
-  inject: string[]
-  apply: (ctx: Context) => void
-} {
-  return {
-    name: 'permission-system',
-    inject: ['settings'],
-    apply(ctx) {
-      const service = new PermissionSystemService(ctx)
-      ctx.permissionSystem = service
+export function apply(ctx: Context, config: Config = {}): void {
+  const service = new PermissionSystemService(ctx)
+  ctx.permissionSystem = service
 
-      // Apply configuration
-      if (Object.keys(config).length > 0) {
-        service.updateConfig(config)
-      }
-
-      // Register settings section
-      ctx.effect(() => {
-        const scope = ctx.settings.register(
-          settingsNamespace('permission-system'),
-          z.object({
-            enabled: z.boolean().default(true),
-            enableAuditLog: z.boolean().default(true),
-            maxAuditLogEntries: z.number().min(100).max(1000000).default(10000),
-            enableCaching: z.boolean().default(true),
-            cacheTtlMs: z.number().min(0).max(3600000).default(300000),
-            defaultPolicy: z.union([z.const('allow'), z.const('deny')]).default('deny'),
-            enableRoleBasedAccess: z.boolean().default(true),
-          }),
-          {
-            base: {
-              enabled: true,
-              enableAuditLog: true,
-              maxAuditLogEntries: 10000,
-              enableCaching: true,
-              cacheTtlMs: 300000,
-              defaultPolicy: 'deny',
-              enableRoleBasedAccess: true,
-            },
-          },
-        )
-
-        // Watch for settings changes
-        scope.watch((next) => {
-          service.updateConfig(next)
-        })
-
-        return () => {
-          // Cleanup
-        }
-      })
-    },
+  // Apply configuration
+  if (Object.keys(config).length > 0) {
+    service.updateConfig(config)
   }
+
+  // Register settings section
+  ctx.effect(() => {
+    const scope = ctx.settings.register(
+      settingsNamespace('permission-system'),
+      z.object({
+        enabled: z.boolean().default(true),
+        enableAuditLog: z.boolean().default(true),
+        maxAuditLogEntries: z.number().min(100).max(1000000).default(10000),
+        enableCaching: z.boolean().default(true),
+        cacheTtlMs: z.number().min(0).max(3600000).default(300000),
+        defaultPolicy: z.union([z.const('allow'), z.const('deny')]).default('deny'),
+        enableRoleBasedAccess: z.boolean().default(true),
+      }),
+      {
+        base: {
+          enabled: true,
+          enableAuditLog: true,
+          maxAuditLogEntries: 10000,
+          enableCaching: true,
+          cacheTtlMs: 300000,
+          defaultPolicy: 'deny',
+          enableRoleBasedAccess: true,
+        },
+      },
+    )
+
+    // Watch for settings changes
+    scope.watch((next) => {
+      service.updateConfig(next)
+    })
+
+    return () => {
+      // Cleanup
+    }
+  })
 }
 
 // Type augmentation for Cordis context
