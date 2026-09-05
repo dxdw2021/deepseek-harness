@@ -140,6 +140,16 @@ export function Composer({
     taRef.current?.focus()
   }
 
+  // 切换思考深度（模型声明了 reasoningEfforts 时可用）
+  const pickEffort = async (provider: string, model: string, effortId: string) => {
+    try {
+      await selectModel(provider, model, effortId)
+      setModelError('')
+    } catch (e) {
+      setModelError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   // --- 提示词增强（输入框按钮：调模型润色当前输入，可还原）---
   const [enhancing, setEnhancing] = useState(false)
   const [enhancedOriginal, setEnhancedOriginal] = useState<string | null>(null)
@@ -483,17 +493,34 @@ export function Composer({
                 {g.models.map((m) => {
                   const active =
                     currentModel != null && currentModel.provider === g.id && currentModel.model === m.id
+                  const effort = currentModel != null && active ? currentModel.reasoningEffort : undefined
                   return (
-                    <div
-                      key={m.id}
-                      className={`model-picker__item${active ? ' model-picker__item--active' : ''}`}
-                      onClick={() => void pickModel(g.id, m.id)}
-                    >
-                      <span className="model-picker__item-id">{m.name}</span>
-                      {m.description && (
-                        <span className="model-picker__item-desc">{m.description}</span>
+                    <div key={m.id}>
+                      <div
+                        className={`model-picker__item${active ? ' model-picker__item--active' : ''}`}
+                        onClick={() => void pickModel(g.id, m.id)}
+                      >
+                        <span className="model-picker__item-id">{m.name}</span>
+                        {m.description && (
+                          <span className="model-picker__item-desc">{m.description}</span>
+                        )}
+                        {active && <span className="model-picker__item-check">✓</span>}
+                      </div>
+                      {active && m.reasoning && m.reasoning.efforts.length > 0 && (
+                        <div className="model-picker__efforts">
+                          <span className="model-picker__efforts-label">思考深度</span>
+                          {m.reasoning.efforts.map(e => (
+                            <button
+                              key={e.id}
+                              className={`model-picker__effort${effort === e.id ? ' model-picker__effort--active' : ''}`}
+                              onClick={() => void pickEffort(g.id, m.id, e.id)}
+                              title={e.description ?? e.name}
+                            >
+                              {e.name}
+                            </button>
+                          ))}
+                        </div>
                       )}
-                      {active && <span className="model-picker__item-check">✓</span>}
                     </div>
                   )
                 })}

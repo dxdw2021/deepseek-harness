@@ -186,6 +186,21 @@ export interface ModelCatalogEntry {
   id: string
   name: string
   description?: string
+  /** Reasoning-effort options the model declares (off/low/high/…); absent for models without adjustable effort. */
+  reasoning?: ModelReasoningInfo
+}
+
+/** Reasoning-effort metadata a model declares (`session.models`). */
+export interface ModelReasoningInfo {
+  efforts: ModelReasoningEffortEntry[]
+  defaultEffort?: string
+}
+
+/** One adapter-owned reasoning effort option. */
+export interface ModelReasoningEffortEntry {
+  id: string
+  name: string
+  description?: string
 }
 
 /** One successfully loaded provider group. */

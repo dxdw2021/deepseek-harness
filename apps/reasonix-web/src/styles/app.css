@@ -2095,3 +2095,10 @@
 }
 .nsp__browse:hover { border-color: var(--accent); }
 .nsp__browse:disabled { opacity: 0.6; cursor: default; }
+
+/* ── 思考深度（模型推理强度）选择 ── */
+.model-picker__efforts{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:2px 14px 10px 24px;border-bottom:1px solid var(--border-color, rgba(128,128,160,.14))}
+.model-picker__efforts-label{font-size:11px;color:var(--text-tertiary, #8a8aa3);margin-right:2px}
+.model-picker__effort{padding:3px 10px;border-radius:12px;border:1px solid var(--border-color, rgba(128,128,160,.25));background:var(--bg-elevated, rgba(255,255,255,.05));color:var(--text-secondary, #b0b0c8);font-size:11px;cursor:pointer;transition:all .12s}
+.model-picker__effort:hover{border-color:var(--accent, #6366f1);color:var(--text-primary, #e5e5ef)}
+.model-picker__effort--active{background:var(--accent, #6366f1);border-color:var(--accent, #6366f1);color:#fff}
