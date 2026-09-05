@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AppChrome } from './components/AppChrome'
 import { Sidebar } from './components/Sidebar'
 import { Inspector } from './components/Inspector'
@@ -7,6 +7,7 @@ import { Composer } from './components/Composer'
 import { StatusBar } from './components/StatusBar'
 import { Welcome } from './components/Welcome'
 import { SidePanel } from './components/SidePanel'
+import { NewSessionPicker, type ProjectOption } from './components/NewSessionPicker'
 import { useStore } from './lib/store'
 
 /**
@@ -35,6 +36,20 @@ export function App() {
   const openCommandPalette = useStore(s => s.openCommandPalette)
   const openSettings = useStore(s => s.openSettings)
   const openSidePanel = useStore(s => s.openSidePanel)
+  const [newPickerOpen, setNewPickerOpen] = useState(false)
+
+  const projects = useMemo<ProjectOption[]>(() => {
+    const byCwd = new Map<string, string>()
+    for (const s of sessions) {
+      if (s.cwd && !byCwd.has(s.cwd)) byCwd.set(s.cwd, s.projectName || s.cwd)
+    }
+    return [{ name: '默认项目', cwd: undefined }, ...[...byCwd.entries()].map(([cwd, name]) => ({ name, cwd }))]
+  }, [sessions])
+
+  const startNewIn = (cwd: string | undefined) => {
+    setNewPickerOpen(false)
+    void newSession(cwd)
+  }
 
   useEffect(() => {
     void init()
@@ -47,7 +62,7 @@ export function App() {
         inspectorOpen={inspectorOpen}
         onToggleSidebar={toggleSidebar}
         onToggleInspector={toggleInspector}
-        onNewTab={() => void newSession()}
+        onNewTab={() => setNewPickerOpen(true)}
         onOpenPalette={() => openCommandPalette(true)}
         onOpenSettings={() => openSettings(true)}
       />
@@ -58,7 +73,7 @@ export function App() {
           activeId={activeSessionId}
           runningSessions={runningSessions}
           onSelect={id => void selectSession(id)}
-          onNew={() => void newSession()}
+          onNew={() => setNewPickerOpen(true)}
           onNewInProject={cwd => void newSession(cwd)}
           onOpenSettings={() => openSettings(true)}
           onOpenPanel={k => openSidePanel(k)}
@@ -89,6 +104,9 @@ export function App() {
         <SidePanel />
       </div>
       <StatusBar />
+      {newPickerOpen && (
+        <NewSessionPicker projects={projects} onPick={startNewIn} onClose={() => setNewPickerOpen(false)} />
+      )}
     </div>
   )
 }
