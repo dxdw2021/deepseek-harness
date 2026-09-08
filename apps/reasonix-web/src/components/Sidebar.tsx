@@ -214,7 +214,6 @@ export function Sidebar({
       }
       return changed ? next : m
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runningIds.join(',')])
 
   if (collapsed) return <aside className="sidebar sidebar--collapsed" />
