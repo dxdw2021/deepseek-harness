@@ -99,6 +99,19 @@ describe("foldSessionHistory", () => {
     expect(msgs[0].content).toBe("ping");
   });
 
+  it("filters host-injected system messages from the transcript", () => {
+    const T = 1000;
+    const events = [
+      ev("user/message", { id: "u0", content: textBlocks("hi"), source: { kind: "user" } }, T),
+      ev("user/message", { id: "s1", content: textBlocks("Current runtime context..."), source: { kind: "plugin", plugin: "@deepseek-ai/dsh-system-prompt" } }, T + 10),
+      ev("user/message", { id: "s2", content: textBlocks("A skill is a reusable..."), source: { kind: "skill-catalog" } }, T + 20),
+      ev("user/message", { id: "s3", content: textBlocks("Instructions from: AGENTS.md"), source: { kind: "agent-instructions" } }, T + 30),
+    ];
+    const msgs = foldSessionHistory(history(events));
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].id).toBe("u0");
+  });
+
   it("handles null history gracefully", () => {
     expect(foldSessionHistory(undefined)).toEqual([]);
         expect(foldSessionHistory(null)).toEqual([]);

@@ -37,6 +37,17 @@ interface ContentBlock {
   text?: string;
 }
 
+/**
+ * True only for messages the user actually sent. The host records system
+ * injections (workspace instructions, runtime-context snapshots, the skill
+ * catalog) as `user/message` rows with a non-`user` `source.kind`; those must
+ * never render as user bubbles.
+ */
+function isUserMessage(data: Record<string, unknown>): boolean {
+  const kind = (data as { source?: { kind?: string } }).source?.kind;
+  return kind === undefined || kind === "user";
+}
+
 /** Plain text visible to the user (all `text` content blocks). */
 function blockText(blocks: unknown): string {
   if (!Array.isArray(blocks)) return "";
@@ -253,6 +264,7 @@ export function foldSessionHistory(history: HistoryEnvelope | null | undefined):
     switch (type) {
       case "user/message": {
         closeAll();
+        if (!isUserMessage(data)) break;
         const images = blockImages(data.content);
         const attachments = blockAttachments(data.content);
         out.push({
@@ -405,6 +417,7 @@ export class LiveStreamFolder {
     switch (type) {
       case "user/message": {
         this.closeAll();
+        if (!isUserMessage(data)) break;
         const id = typeof data.id === "string" ? data.id : `u-${time}`;
         const images = blockImages(data.content);
         const attachments = blockAttachments(data.content);
