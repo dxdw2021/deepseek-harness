@@ -14,6 +14,7 @@ import type { SettingsApi } from './settings.ts'
 import type { CredentialsApi } from './credentials.ts'
 import type { LlmApi } from './llm.ts'
 import type { SubagentsApi } from './subagents.ts'
+import type { AudioApi } from './audio.ts'
 import type { RpcResponse } from './rpc.ts'
 
 /**
@@ -42,6 +43,7 @@ export interface RpcMethodMap {
   'host.pickDirectory': HostApi['pickDirectory']
   'host.listDirectory': HostApi['listDirectory']
   'host.createDirectory': HostApi['createDirectory']
+  'host.listFiles': HostApi['listFiles']
   'host.openPath': HostApi['openPath']
   'workspace.list': WorkspaceApi['list']
   'workspace.create': WorkspaceApi['create']
@@ -75,6 +77,7 @@ export interface RpcMethodMap {
   'llm.models': LlmApi['models']
   'llm.discoverModels': LlmApi['discoverModels']
   'llm.importOpencodeCredential': LlmApi['importOpencodeCredential']
+  'audio.transcribe': AudioApi['transcribe']
 }
 
 /** Business request payload of method K (reaches through the RpcRequest narrow form to payload). */

@@ -15,7 +15,7 @@ import { rpcReceiptSchema, serverRequestSchema, serverResponseSchema } from '../
 import { hostFrameSchema, muxFrameSchema } from '../api/events.schema.ts'
 import {
   hostCreateDirectoryValueSchema, hostDescribeValueSchema,
-  hostListDirectoryValueSchema, hostOpenPathValueSchema, hostPickDirectoryValueSchema,
+  hostListDirectoryValueSchema, hostListFilesValueSchema, hostOpenPathValueSchema, hostPickDirectoryValueSchema,
 } from '../api/host.schema.ts'
 import {
   sessionCancelValueSchema,
@@ -61,6 +61,7 @@ import {
   credentialsDescribeValueSchema, credentialsSetValueSchema, credentialsUnsetValueSchema,
 } from '../api/credentials.schema.ts'
 import { llmDiscoverModelsValueSchema, llmImportOpencodeCredentialValueSchema, llmModelsValueSchema, llmProvidersValueSchema } from '../api/llm.schema.ts'
+import { audioTranscribeValueSchema } from '../api/audio.schema.ts'
 import {
   subagentHistoryValueSchema,
   subagentInterruptValueSchema,
@@ -110,6 +111,7 @@ export interface IApiClient {
     pickDirectory(payload: RequestPayload<'host.pickDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.pickDirectory'>>>
     listDirectory(payload: RequestPayload<'host.listDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.listDirectory'>>>
     createDirectory(payload: RequestPayload<'host.createDirectory'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.createDirectory'>>>
+    listFiles(payload: RequestPayload<'host.listFiles'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.listFiles'>>>
     openPath(payload: RequestPayload<'host.openPath'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.openPath'>>>
   }
   workspace: {
@@ -162,6 +164,9 @@ export interface IApiClient {
     discoverModels(payload: RequestPayload<'llm.discoverModels'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'llm.discoverModels'>>>
     importOpencodeCredential(payload: RequestPayload<'llm.importOpencodeCredential'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'llm.importOpencodeCredential'>>>
   }
+  audio: {
+    transcribe(payload: RequestPayload<'audio.transcribe'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'audio.transcribe'>>>
+  }
   /** client-response passthrough (rpcId is a backfill of the server-request's id — never minted here). */
   respond(message: ClientResponse, signal?: AbortSignal): Promise<RpcReceipt>
 }
@@ -191,6 +196,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'host.pickDirectory': hostPickDirectoryValueSchema,
   'host.listDirectory': hostListDirectoryValueSchema,
   'host.createDirectory': hostCreateDirectoryValueSchema,
+  'host.listFiles': hostListFilesValueSchema,
   'host.openPath': hostOpenPathValueSchema,
   'workspace.list': workspaceListValueSchema,
   'workspace.create': workspaceCreateValueSchema,
@@ -224,6 +230,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'llm.models': llmModelsValueSchema,
   'llm.discoverModels': llmDiscoverModelsValueSchema,
   'llm.importOpencodeCredential': llmImportOpencodeCredentialValueSchema,
+  'audio.transcribe': audioTranscribeValueSchema,
 }
 
 /** Default timeout for bounded unary calls (rpc-compare 2026-07-19: a hung host must not leave callers pending forever). */
@@ -441,6 +448,7 @@ export abstract class AbstractApiClient implements IApiClient {
       'host.pickDirectory', payload, signal, 'caller-signal-only',
     ),
     listDirectory: (payload, signal) => this.callUnary('host.listDirectory', payload, signal),
+    listFiles: (payload, signal) => this.callUnary('host.listFiles', payload, signal),
     createDirectory: (payload, signal) => this.callUnary('host.createDirectory', payload, signal),
     openPath: (payload, signal) => this.callUnary('host.openPath', payload, signal),
   }
@@ -501,6 +509,10 @@ export abstract class AbstractApiClient implements IApiClient {
     models: (payload, signal) => this.callUnary('llm.models', payload, signal),
     discoverModels: (payload, signal) => this.callUnary('llm.discoverModels', payload, signal),
     importOpencodeCredential: (payload, signal) => this.callUnary('llm.importOpencodeCredential', payload, signal),
+  }
+
+  readonly audio: IApiClient['audio'] = {
+    transcribe: (payload, signal) => this.callUnary('audio.transcribe', payload, signal),
   }
 
   readonly events: IApiClient['events'] = {

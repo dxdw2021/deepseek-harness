@@ -86,10 +86,28 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * layer and every registrant already depends on it for `ctx.settingsScope`.
      */
     'settings.general.item': { kind: 'list'; scope: 'root'; owner: SettingsGeneralItemOwnerProps }
+    /**
+     * One preference row inside the Model Requests section — the additive seat
+     * for a single model-request behavior setting that needs no page of its own
+     * (e.g. the default retry count). Options: `id` (row key), `order` (row
+     * position). The section column only stacks rows, so a row draws its own
+     * internals, including its label: nothing projects a `label` here and the
+     * owner passes no props at all. Declared at runtime by the
+     * ui-settings-model-retry entry; the type lives here with every other
+     * settings slot type, because this package is the settings domain's base
+     * layer and every registrant already depends on it for `ctx.settingsScope`.
+     */
+    'settings.model-request.item': { kind: 'list'; scope: 'root'; owner: SettingsModelRequestItemOwnerProps }
   }
 }
 /** Owner share of a General preference row (the section supplies nothing). */
 export interface SettingsGeneralItemOwnerProps {
+  /** Marker field: item owner props are intentionally empty. */
+  children?: never
+}
+
+/** Owner share of a Model Requests preference row (the section supplies nothing). */
+export interface SettingsModelRequestItemOwnerProps {
   /** Marker field: item owner props are intentionally empty. */
   children?: never
 }

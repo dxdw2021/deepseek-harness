@@ -239,11 +239,23 @@ describe('healProfilesModuleFallback', () => {
     expect(before).toContain('dep-of-a')
   })
 
-  it('throws when a fallback entry is a real directory', () => {
+  it('moves a stale real directory aside instead of deleting it', () => {
     const anchor = stageInstallation({})
     const home = tmp()
-    mkdirSync(join(home, 'profiles', 'node_modules', 'dsh-app'), { recursive: true })
-    expect(() => { healProfilesModuleFallback(anchor, home) }).toThrow('is not a symlink')
+    const stale = join(home, 'profiles', 'node_modules', 'dsh-app')
+    mkdirSync(stale, { recursive: true })
+    writeFileSync(join(stale, 'stale-file'), 'stale')
+    // A previous incident already claimed .stale-0; the next one steps aside.
+    mkdirSync(join(home, 'profiles', 'node_modules', 'dsh-app.stale-0'), { recursive: true })
+    writeFileSync(join(home, 'profiles', 'node_modules', 'dsh-app.stale-0', 'old'), 'old')
+    healProfilesModuleFallback(anchor, home)
+    const fallback = join(home, 'profiles', 'node_modules')
+    expect(lstatSync(join(fallback, 'dsh-app')).isSymbolicLink()).toBe(true)
+    expect(readlinkSync(join(fallback, 'dsh-app'))).toContain('app')
+    // The residue survives beside the link; nothing is deleted.
+    const aside = join(fallback, 'dsh-app.stale-1')
+    expect(readFileSync(join(aside, 'stale-file'), 'utf8')).toBe('stale')
+    expect(readFileSync(join(fallback, 'dsh-app.stale-0', 'old'), 'utf8')).toBe('old')
   })
 
   it('replaces a wrong symlink', () => {
@@ -261,7 +273,7 @@ describe('healProfilesModuleFallback', () => {
     // and symlinkSync. Simulated by pre-creating the correct link and calling
     // the internal path through a stale-lstat shim is not possible from
     // outside, so probe the observable contract: healing twice concurrently
-    // is a no-op, and a foreign REAL directory still fails loud.
+    // is a no-op.
     const anchor = stageInstallation({})
     const home = tmp()
     healProfilesModuleFallback(anchor, home)

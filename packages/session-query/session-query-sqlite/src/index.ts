@@ -505,10 +505,23 @@ export class SqliteSessionQueryEngine extends SessionQueryEngine {
             // the returned observation live-preferred.
             if (initiallyLive.has(entry.header.id) || this.ctx.sessions.get(entry.header.id) !== undefined) continue
             assertNotAborted(signal)
-            const loaded = await persistence.inspect(entry.header.id, signal)
-            assertNotAborted(signal)
-            assertSessionHeadersCompatible(entry.header, loaded.meta)
-            entry.loaded = observeSession(loaded.meta, loaded.events)
+            try {
+              const loaded = await persistence.inspect(entry.header.id, signal)
+              assertNotAborted(signal)
+              assertSessionHeadersCompatible(entry.header, loaded.meta)
+              entry.loaded = observeSession(loaded.meta, loaded.events)
+            } catch (error: unknown) {
+              // One un-parseable durable session (for example written by an
+              // older format) must not disable search for the rest of the
+              // index: leave it untouched on disk, skip indexing it, and keep
+              // observing the others. Aborts and own SessionQueryError
+              // failures still propagate.
+              if (isAbort(error) || signal?.aborted) throw error
+              if (error instanceof SessionQueryError) throw error
+              this.ctx.logger.warn(
+                `session-search skipped un-parseable session ${entry.header.id}: ${errorMessage(error)}`,
+              )
+            }
           }
           assertNotAborted(signal)
           const afterSnapshots = await persistence.listSnapshots(signal)

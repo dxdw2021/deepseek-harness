@@ -1,0 +1,2 @@
+{"sequence":1,"timestamp":"2026-08-30T16:08:19.5209665+08:00","event_type":"state_change","task_id":"20260828-072734.489069700-opencpde-big-pickle--bash-2","session_id":"20260828-072734.489069700-opencpde-big-pickle","state":"running","runtime_state":"alive"}
+{"sequence":2,"timestamp":"2026-08-30T16:09:05.9746052+08:00","event_type":"state_change","task_id":"20260828-072734.489069700-opencpde-big-pickle--bash-2","session_id":"20260828-072734.489069700-opencpde-big-pickle","state":"cancelled","runtime_state":"exited","error_code":"job_failed"}

@@ -39,6 +39,16 @@ export const QUOTA_EXCEEDED_CODE = 'QUOTA'
 export const EMPTY_RESPONSE_CODE = 'EMPTY_RESPONSE'
 
 /**
+ * Canonical provider-neutral code for a stream that ended cleanly without its
+ * terminal marker (no `[DONE]` / done event). Adapters classify this as a
+ * protocol violation because the attempt cannot be trusted as complete: the
+ * interrupted response may have cut off mid-token, so neither model history
+ * nor the consumer may rely on it. Retry policy treats it as safe to repeat
+ * because failed chunks never enter the derived surface.
+ */
+export const STREAM_CLOSED_CODE = 'STREAM_CLOSED'
+
+/**
  * Canonical provider-neutral code for a credential that was supplied but
  * cannot be used — malformed rather than absent. Distinct from
  * `MISSING_CREDENTIAL` because the fix differs: correct the stored value

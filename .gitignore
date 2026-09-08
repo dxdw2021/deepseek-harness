@@ -1,7 +1,8 @@
-CLAUDE.local.md
+﻿CLAUDE.local.md
 .env
 node_modules/
 lib/
+!apps/reasonix-web/src/lib/
 *.tsbuildinfo
 pnpm-debug.log
 .pnpm-store/
@@ -13,6 +14,10 @@ examples/*/.sessions/
 coverage/
 .doc-typecheck-*/
 .node-next-types-*/
+# Desktop bundled runtime is a build artifact; keep it out of git (>100MB).
+packages/desktop/resources/dsh-runtime.zip
+packages/desktop/resources/dsh/
+packages/desktop/resources/node/
 .oxlint-contract-*/
 .oxlintrc.contract-*.json
 oxlint-contract-*.ts
@@ -38,3 +43,14 @@ apps/web/dist/
 worktrees/
 .agents/worktrees/
 .typert-*/
+.hooks/
+
+.trae/
+
+# local runtime logs and scratch files
+*.log
+_tmp_upload.png
+build_libhost.txt
+tmp_*.md
+
+packages/desktop/resources/dsh-runtime.zip

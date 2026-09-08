@@ -1,0 +1,2 @@
+[permissions]
+allow = ["Bash=cd \"D:\\\\DEV\\\\tool\\\\AI\\\\deepseek-harness\" && echo \"=== core/session/src/types.ts (head 200) ===\" && sed -n '1,200p' packages/core/session/src/types.ts"]

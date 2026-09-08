@@ -2545,6 +2545,25 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           truncated: false,
         })
       },
+      // Deterministic project-file listing: the fixture tree's directories
+      // plus a stable README at each non-root level (design-mock content).
+      listFiles: (request) => {
+        const target = request.payload.path ?? FIXTURE_HOME
+        const children = childrenOf(target)
+        if (children === undefined) {
+          return err(request, { code: 'directory-unreadable', message: `cannot list ${target}: not in the fixture tree`, details: { path: target } })
+        }
+        const rows = children.map(name => ({
+          name,
+          path: target === '/' ? `/${name}` : `${target}/${name}`,
+          hidden: name.startsWith('.'),
+          isDirectory: true,
+        }))
+        if (target !== '/') {
+          rows.push({ name: 'README.md', path: `${target}/README.md`, hidden: false, isDirectory: false })
+        }
+        return ok(request, { path: target, entries: rows, truncated: false })
+      },
       createDirectory: (request) => {
         const parent = request.payload.path
         const children = childrenOf(parent)
@@ -2965,6 +2984,9 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       // already-configured branch of the login action.
       importOpencodeCredential: request => ok(request, { imported: false, alreadyPresent: true }),
     },
+    audio: {
+      transcribe: request => ok(request, { text: '（fixture 语音识别结果）', model: 'fixture', durationMs: 0 }),
+    },
     respond(message: ClientResponse): Promise<RpcReceipt> {
       // Same routing discipline as the host: rpcId first, then the payload's
       // audit correlation; a settled or unknown id is not-pending.
@@ -3099,6 +3121,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'host.describe': return this.api.host.describe(request)
       case 'host.pickDirectory': return this.api.host.pickDirectory(request, new AbortController().signal)
       case 'host.listDirectory': return this.api.host.listDirectory(request, new AbortController().signal)
+      case 'host.listFiles': return this.api.host.listFiles(request)
       case 'host.createDirectory': return this.api.host.createDirectory(request)
       case 'host.openPath': return this.api.host.openPath(request, new AbortController().signal)
       case 'workspace.list': return this.api.workspace.list(request)
@@ -3133,6 +3156,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'llm.models': return this.api.llm.models(request)
       case 'llm.discoverModels': return this.api.llm.discoverModels(request, signal)
       case 'llm.importOpencodeCredential': return this.api.llm.importOpencodeCredential(request, signal)
+      case 'audio.transcribe': return this.api.audio.transcribe(request)
     }
   }
 

@@ -17,6 +17,7 @@ import type {
   PasteComponent, QueuedMessage, SessionInput, SubmitAttempt,
 } from './contract.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
+import { PromptHistory } from './history.ts'
 import { InputMachine } from './machine.ts'
 
 /** Popup face the shell needs (dismissal only; typed structurally to avoid a value import). */
@@ -89,6 +90,8 @@ export class SessionInputShell implements SessionInput {
   private disposed = false
   /** Draft persistence mirror (chat store write; receives the clipboard projection, never raw placeholders). */
   private mirrorFn: ((text: string) => void) | undefined
+  /** Prompt history for UP/DOWN navigation through submitted drafts. */
+  private readonly promptHistory = new PromptHistory()
 
   constructor(private readonly deps: SessionInputDeps) {
     this.state = createSnapshotStore<InputState>(this.compose())
@@ -153,6 +156,7 @@ export class SessionInputShell implements SessionInput {
    * @param imageIds - admitted image ids to remove from this draft.
    */
   commitSend(imageIds: readonly DraftAttachmentId[]): void {
+    this.promptHistory.push(this.snapshot.draft)
     const submitted = new Set(imageIds)
     this.imageIds = this.imageIds.filter(id => !submitted.has(id))
     this.run(this.core.dispatch({ type: 'send-committed' }))
@@ -259,6 +263,16 @@ export class SessionInputShell implements SessionInput {
   /** Dismiss the popupSelect shell (any interaction outside the box). */
   dismissPopup(): void {
     this.deps.popup?.()?.dismiss()
+  }
+
+  /** Navigate to the previous submitted draft; null when empty or at the oldest entry. */
+  promptHistoryUp(): string | null {
+    return this.promptHistory.up(this.snapshot.draft)
+  }
+
+  /** Navigate to the next entry; null when not navigating or at the bottom. */
+  promptHistoryDown(): string | null {
+    return this.promptHistory.down()
   }
 
   /**

@@ -68,12 +68,30 @@ export function planReviewOf(questions: readonly QuestionItem[]): PlanReview | u
   // Length-checked above; the index read is the narrowing tax, not a guess.
   const question = questions[0] as QuestionItem
   const intent = question.intent
-  if (intent?.kind !== 'plan-review' || question.detail === undefined) return undefined
+  if (intent?.kind !== 'plan-review' || question.detail === undefined) {
+    // Diagnostic: log why a plan-review intent did not render as the review panel.
+    if (intent?.kind === 'plan-review') {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[plan-review] question has plan-review intent but detail is missing; '
+        + 'falling back to generic question flow. question.id=%s', question.id,
+      )
+    }
+    return undefined
+  }
   if (question.multiSelect === true) return undefined
   const options = question.options ?? []
   if (options.length > 2) return undefined
   const approve = options.find(option => option.label === intent.approve)
-  if (approve === undefined) return undefined
+  if (approve === undefined) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[plan-review] intent.approve label %o not found in options; '
+      + 'falling back to generic question flow. question.id=%s',
+      intent.approve, question.id,
+    )
+    return undefined
+  }
   const decline = options.find(option => option.label !== intent.approve)
   return {
     id: question.id,

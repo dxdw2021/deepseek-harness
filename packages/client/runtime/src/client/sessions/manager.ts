@@ -88,18 +88,43 @@ function bufferedRequestKey(envelope: RpcRequest<MuxFrame>): string | undefined 
   }
 }
 
-/** Match ui-user-questions's binary plan-review routing at the wire boundary. */
+/**
+ * Match ui-user-questions's binary plan-review routing at the wire boundary.
+ *
+ * When a plan-review intent is present but the routing falls back to generic
+ * `'question'`, the sidebar status degrades silently. The diagnostic logs
+ * below surface *which* condition failed so a disconnected user can report
+ * the exact reason.
+ */
 function questionInteractionStatus(
   questions: Extract<MuxFrame, { type: 'question/requested' }>['questions'],
 ): PendingInteractionStatus {
   if (questions.length !== 1) return 'question'
   const question = questions[0] as typeof questions[number]
   const intent = question.intent
-  if (intent?.kind !== 'plan-review' || question.detail === undefined) return 'question'
+  if (intent?.kind !== 'plan-review' || question.detail === undefined) {
+    if (intent?.kind === 'plan-review') {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[plan-review] sidebar: intent present but detail missing, '
+        + 'status degraded to generic question. question.id=%s', question.id,
+      )
+    }
+    return 'question'
+  }
   if (question.multiSelect === true) return 'question'
   const options = question.options ?? []
   if (options.length > 2) return 'question'
-  return options.some(option => option.label === intent.approve) ? 'plan-review' : 'question'
+  const approve = options.some(option => option.label === intent.approve)
+  if (!approve) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[plan-review] sidebar: intent.approve label %o not found in options, '
+      + 'status degraded to generic question. question.id=%s',
+      intent.approve, question.id,
+    )
+  }
+  return approve ? 'plan-review' : 'question'
 }
 
 /** Instance cluster + frame entry + the session list. */

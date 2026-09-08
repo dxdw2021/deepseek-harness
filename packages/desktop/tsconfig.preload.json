@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node10",
+    "lib": ["ES2022"],
+    "outDir": "dist/main",
+    "rootDir": "src/main",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": false,
+    "sourceMap": false,
+    "types": ["node"],
+    "ignoreDeprecations": "5.0"
+  },
+  "include": ["src/main/preload.ts"]
+}

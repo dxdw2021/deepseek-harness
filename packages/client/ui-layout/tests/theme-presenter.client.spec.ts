@@ -5,16 +5,28 @@
 // retracts everything the presenter wrote.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
+import type {
+  ThemeDefinition, ThemeSnapshot, ThemeTokenOverrides, ThemeTokens,
+} from '@deepseek-ai/dsh-client-ui-theme/client'
 import { DARK_ATTRIBUTE, ThemePresenter } from '@deepseek-ai/dsh-client-ui-layout/src/client/theme-presenter.ts'
 
 const LIGHT_THEME_COLOR = 'rgb(255, 255, 255)'
 const DARK_THEME_COLOR = 'rgb(21, 21, 23)'
 
-function snapshot(colorScheme: 'light' | 'dark', tokens: Record<string, string> = {}): ThemeSnapshot {
+function snapshot(
+  colorScheme: 'light' | 'dark',
+  tokens: Record<string, { light: string; dark: string }> = {},
+): ThemeSnapshot {
   // The presenter must key off colorScheme, not the id — keep them distinct.
-  const active = { id: `${colorScheme}-test`, colorScheme, tokens }
-  return { preference: colorScheme, active, themes: [active], revision: 1 }
+  const overrides: ThemeTokenOverrides = tokens
+  const resolvedTokens: ThemeTokens = Object.fromEntries(
+    Object.entries(tokens).map(([name, modes]) => [name, colorScheme === 'dark' ? modes.dark : modes.light]),
+  )
+  const definition: ThemeDefinition = {
+    id: `${colorScheme}-test`, style: 'graphite', colorScheme, tokens: overrides,
+  }
+  const active = { ...definition, tokens: resolvedTokens }
+  return { preference: colorScheme, style: 'graphite', active, themes: [definition], revision: 1 }
 }
 
 function clearThemePresentation(): void {
@@ -67,10 +79,10 @@ describe('ThemePresenter', () => {
 
   it('applies tokens as inline variables and clears the previous set on theme change', () => {
     const presenter = new ThemePresenter()
-    presenter.apply(snapshot('dark', { '--dsw-alias-bg': '#111', '--dsw-alias-fg': '#eee' }))
+    presenter.apply(snapshot('dark', { '--dsw-alias-bg': { light: '#111', dark: '#111' }, '--dsw-alias-fg': { light: '#eee', dark: '#eee' } }))
     expect(document.body.style.getPropertyValue('--dsw-alias-bg')).toBe('#111')
     expect(document.body.style.getPropertyValue('--dsw-alias-fg')).toBe('#eee')
-    presenter.apply(snapshot('light', { '--dsw-alias-bg': '#fff' }))
+    presenter.apply(snapshot('light', { '--dsw-alias-bg': { light: '#fff', dark: '#fff' } }))
     expect(document.body.style.getPropertyValue('--dsw-alias-bg')).toBe('#fff')
     // The old theme's extra variable is gone, not merged.
     expect(document.body.style.getPropertyValue('--dsw-alias-fg')).toBe('')
@@ -79,7 +91,7 @@ describe('ThemePresenter', () => {
   it('dispose removes color-scheme, the attribute, and every applied variable, sparing foreign inline styles', () => {
     document.body.style.setProperty('--foreign', 'kept')
     const presenter = new ThemePresenter()
-    presenter.apply(snapshot('dark', { '--dsw-alias-bg': '#111' }))
+    presenter.apply(snapshot('dark', { '--dsw-alias-bg': { light: '#111', dark: '#111' } }))
     const meta = themeColorMeta()
     presenter.dispose()
     expect(document.documentElement.style.colorScheme).toBe('')

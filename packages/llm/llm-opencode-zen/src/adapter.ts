@@ -116,7 +116,7 @@ export const ANONYMOUS_BEARER = 'public'
  * suppression).
  */
 export const ZEN_CLIENT_USER_AGENT
-  = 'opencode/local ai-sdk/provider-utils/4.0.23 runtime/bun/1.4.0 (deepseek-harness)'
+  = 'opencode/local ai-sdk/provider-utils/4.0.23 runtime/bun/1.4.0'
 
 /** OpenCode Zen error `type`s that name exhausted per-IP free/go quotas (an account-scale limit, not request throttling). */
 const ZEN_TIER_LIMIT_ERROR = /FreeUsageLimitError|GoUsageLimitError/

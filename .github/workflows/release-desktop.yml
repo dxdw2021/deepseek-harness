@@ -1,0 +1,168 @@
+# DeepSeek Harness Desktop - Release Workflow
+#
+# Builds and publishes desktop installers for Windows, macOS, and Linux.
+# Triggered by pushing a tag matching 'desktop-v*'.
+
+name: Release Desktop
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  # Build Windows installer
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build dsh
+        run: pnpm --filter @deepseek-ai/dsh-cli build
+
+      - name: Bundle dsh
+        run: pnpm --filter @deepseek-ai/dsh-desktop bundle:dsh
+
+      - name: Build desktop
+        run: pnpm --filter @deepseek-ai/dsh-desktop build:electron:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Windows code signing (optional)
+          # WIN_CERTIFICATE_FILE: ${{ secrets.WIN_CERTIFICATE_FILE }}
+          # WIN_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          path: |
+            packages/desktop/dist/installers/*.exe
+            packages/desktop/dist/installers/*.exe.blockmap
+            packages/desktop/dist/installers/latest.yml
+
+  # Build macOS installer
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build dsh
+        run: pnpm --filter @deepseek-ai/dsh-cli build
+
+      - name: Bundle dsh
+        run: pnpm --filter @deepseek-ai/dsh-desktop bundle:dsh
+
+      - name: Build desktop
+        run: pnpm --filter @deepseek-ai/dsh-desktop build:electron:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS code signing (optional)
+          # APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installers
+          path: |
+            packages/desktop/dist/installers/*.dmg
+            packages/desktop/dist/installers/*.dmg.blockmap
+            packages/desktop/dist/installers/latest-mac.yml
+
+  # Build Linux installer
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build dsh
+        run: pnpm --filter @deepseek-ai/dsh-cli build
+
+      - name: Bundle dsh
+        run: pnpm --filter @deepseek-ai/dsh-desktop bundle:dsh
+
+      - name: Build desktop
+        run: pnpm --filter @deepseek-ai/dsh-desktop build:electron:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-installers
+          path: |
+            packages/desktop/dist/installers/*.AppImage
+            packages/desktop/dist/installers/*.deb
+            packages/desktop/dist/installers/*.rpm
+            packages/desktop/dist/installers/latest-linux.yml
+
+  # Create GitHub Release
+  release:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: DeepSeek Harness Desktop ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.exe
+            artifacts/**/*.dmg
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.rpm
+            artifacts/**/*.yml
+            artifacts/**/*.blockmap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

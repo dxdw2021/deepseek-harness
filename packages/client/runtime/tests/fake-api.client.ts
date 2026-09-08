@@ -248,6 +248,13 @@ export class FakeApiClient implements IApiClient {
     list: (payload: unknown) => this.record('skill.list', payload, this.onSkillList(payload)),
   }
 
+  onAudioTranscribe: (payload: unknown) => Promise<RpcResponse<{ text: string; model: string; durationMs: number }>>
+    = () => Promise.resolve(ok({ text: '（fake 语音识别结果）', model: 'fake', durationMs: 0 }))
+
+  readonly audio: IApiClient['audio'] = {
+    transcribe: (payload: unknown) => this.record('audio.transcribe', payload, this.onAudioTranscribe(payload)),
+  }
+
   readonly goals: IApiClient['goals'] = {
     create: payload => this.record('goal.create', payload, Promise.resolve(ok({ ref: { id: 'fake-goal' as never, revision: 1 } }))),
     edit: payload => this.record('goal.edit', payload, Promise.resolve(ok({ ref: { id: 'fake-goal' as never, revision: 1 } }))),

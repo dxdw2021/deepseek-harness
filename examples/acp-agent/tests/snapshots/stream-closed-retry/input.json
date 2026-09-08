@@ -1,0 +1,7 @@
+{
+  "steps": [
+    { "op": "initialize" },
+    { "op": "newSession" },
+    { "op": "prompt", "text": "This prompt first receives a clean stream closure, then a retried reply." }
+  ]
+}

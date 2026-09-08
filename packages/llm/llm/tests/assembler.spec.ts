@@ -110,6 +110,36 @@ describe('BlockAssembler', () => {
     ])
   })
 
+  it('falls back to a generated id for an explicit empty-string tool-call id', () => {
+    const assembler = new BlockAssembler()
+    // A provider emitting `tool_calls[].id: ""` supplies `CallId('')`; the
+    // `||` guard (not `??`) must replace it so the block never carries an
+    // empty correlation id that would duplicate on the wire and corrupt the
+    // session log's tool/result records.
+    assembler.push({ type: 'tool-call-delta', index: 0, id: CallId(''), name: 'echo', argumentsDelta: '{}' })
+    expect(assembler.blocks()).toEqual([
+      { type: 'tool-call', id: CallId('call-0'), name: 'echo', arguments: '{}' },
+    ])
+  })
+
+  it('normalizes an empty-id tool call delivered as an authoritative block-end payload', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({ type: 'block-start', index: 0, blockType: 'tool-call' })
+    assembler.push({ type: 'block-end', index: 0, block: { type: 'tool-call', id: CallId(''), name: 'echo', arguments: '{}' } })
+    expect(assembler.blocks()).toEqual([
+      { type: 'tool-call', id: CallId('call-0'), name: 'echo', arguments: '{}' },
+    ])
+  })
+
+  it('keeps two empty-id tool calls distinct so the provider never sees a duplicate tool_call_id', () => {
+    const assembler = new BlockAssembler()
+    assembler.push({ type: 'tool-call-delta', index: 0, id: CallId(''), name: '', argumentsDelta: '{}' })
+    assembler.push({ type: 'tool-call-delta', index: 1, id: CallId(''), name: '', argumentsDelta: '{}' })
+    const ids = assembler.blocks().map(block => (block.type === 'tool-call' ? block.id : undefined))
+    expect(ids).toEqual([CallId('call-0'), CallId('call-1')])
+    expect(new Set(ids).size).toBe(2)
+  })
+
   it('exposes usage via the getter when a usage chunk was received', () => {
     const assembler = new BlockAssembler()
     assembler.push({ type: 'text-delta', index: 0, text: 'msg' })

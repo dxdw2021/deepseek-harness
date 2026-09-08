@@ -24,7 +24,7 @@
 
 import { createRequire } from 'node:module'
 import {
-  existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync,
+  existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, renameSync, symlinkSync, unlinkSync, writeFileSync,
 } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
@@ -167,7 +167,7 @@ export function initProfile(dir: string, bundles: readonly string[]): void {
   if (!existsSync(workspacePath)) writeFileSync(workspacePath, PROFILE_PNPM_WORKSPACE)
 }
 
-/** Ensure `link` is a symlink to `target`, replacing a wrong or dangling link; a real directory throws. */
+/** Ensure `link` is a symlink to `target`, replacing a wrong or dangling link and moving a stale real entry aside. */
 function ensureSymlink(link: string, target: string): void {
   let stat
   try {
@@ -178,13 +178,28 @@ function ensureSymlink(link: string, target: string): void {
     stat = undefined
   }
   if (stat !== undefined) {
-    if (!stat.isSymbolicLink()) {
-      throw new Error(`dsh: ${link} exists and is not a symlink; remove it so dsh can manage the installation fallback`)
+    if (stat.isSymbolicLink()) {
+      if (readlinkSync(link) === target) return
+      // unlink deletes the reparse point itself on Windows too; rmSync treats
+      // a junction as a directory and throws EISDIR unless recursive.
+      unlinkSync(link)
+    } else {
+      // A real directory or file at a managed fallback path is stale residue
+      // (an interrupted boot, a previous pnpm materialization, an AV that
+      // replaced a junction, or leftover state from a host that could not
+      // create junctions). It is never deleted: the entry is moved aside in
+      // place so nothing is lost, then re-linked to the installation closure,
+      // without which profile boot refuses to start. Only the fallback
+      // directory reaches here, so the moved-aside residue is never sticky
+      // state that shadows a profile bootstrap.
+      let asideName = 0
+      let aside
+      do {
+        aside = `${link}.stale-${asideName}`
+        asideName += 1
+      } while (existsSync(aside))
+      renameSync(link, aside)
     }
-    if (readlinkSync(link) === target) return
-    // unlink deletes the reparse point itself on Windows too; rmSync treats a
-    // junction as a directory and throws EISDIR unless recursive.
-    unlinkSync(link)
   }
   try {
     symlinkSync(target, link, 'junction')

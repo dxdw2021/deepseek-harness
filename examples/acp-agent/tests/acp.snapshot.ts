@@ -348,6 +348,14 @@ const SCENARIOS: Scenario[] = [
   // reply, and a clean completed retry turn. Its overlay only pins a deterministic
   // 1 ms zero-jitter delay, so it shares the default header class.
   { name: 'empty-response-retry', hasModelTurn: true, recorded: false, configPath: RETRY_CONFIG },
+  // Keyless, authored (like empty-response-retry): a live provider cannot be
+  // coaxed into a clean stream closure, so the fixture scripts the adapters'
+  // partial output cut off without the [DONE] terminal marker in turn 1
+  // followed by the recovered reply in retry turn 2. Before this change such
+  // an interruption ended the long-running turn; the default policy now
+  // classifies STREAM_CLOSED as retryable, so the durable transcript carries
+  // the same `llm/retry` record shape and the turn completes.
+  { name: 'stream-closed-retry', hasModelTurn: true, recorded: false, configPath: RETRY_CONFIG },
   // Keyless, authored (like error-finish/cancel): deterministically forcing a
   // LIVE model to repeat one call three times is not a stable recording, so
   // the fixture scripts five identical todo_write calls and pins BOTH reminder

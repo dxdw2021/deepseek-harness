@@ -28,6 +28,12 @@ overrides:
   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
   '@deepseek-ai/schemastery': 'link:vendor/schemastery'
 
+# sharp (transitive dep of @xenova/transformers in dsh-host-apiproxy) runs an
+# install script that fetches its libvips binary; without this allowlist pnpm
+# ignores it and the STT pipeline fails to load.
+onlyBuiltDependencies:
+  - sharp
+
 peerDependencyRules:
   allowedVersions:
     typescript: '>=5 <7'
@@ -53,6 +59,7 @@ allowBuilds:
   # The Python runtime deploy includes the reviewed workspace postinstall that
   # restores the executable bit on node-pty's macOS spawn helper.
   '@deepseek-ai/dsh-subprocess-local@file:packages/subprocess/subprocess-local': true
+  sharp: set this to true or false
 
 minimumReleaseAgeExclude:
   # Fresh pi-ai releases carry the model catalog updates that are the whole

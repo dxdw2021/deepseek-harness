@@ -128,6 +128,29 @@ Real-API tests and demos read `DEEPSEEK_API_KEY`, optional `DEEPSEEK_BASE_URL`, 
 - TODO markers: `FIXME`/`TODO`/`XXX` by urgency ([semantics](docs/development.md)).
 - Files end with exactly one trailing newline; `git diff --cached --check` (pre-commit) gates it.
 
+## IMA Knowledge Base Rules
+
+When creating IMA notes for this project, always add them to the knowledge base **"deepseek-harness"** (ID: `9HfAeAOy9KEu5heDApEoEEWo1faax96_2s5AkP7Bij4=`).
+
+**Workflow:**
+1. Create note using `import_doc` API
+2. Add note to knowledge base using `add_knowledge` with `media_type=11` and `note_info.content_id=<note_id>`
+
+**Example:**
+```powershell
+# Step 1: Create note
+$resp = Invoke-RestMethod -Uri "https://ima.qq.com/openapi/note/v1/import_doc" -Method Post -Body $body -ContentType "application/json; charset=utf-8" -Headers $headers
+$noteId = $resp.data.note_id
+
+# Step 2: Add to knowledge base
+$body = @{
+    media_type = 11
+    knowledge_base_id = "9HfAeAOy9KEu5heDApEoEEWo1faax96_2s5AkP7Bij4="
+    note_info = @{ content_id = $noteId }
+} | ConvertTo-Json -Depth 10
+Invoke-RestMethod -Uri "https://ima.qq.com/openapi/wiki/v1/add_knowledge" -Method Post -Body $body -ContentType "application/json; charset=utf-8" -Headers $headers
+```
+
 ## Defensive patterns
 
 Read [docs/defensive-patterns.md](docs/defensive-patterns.md) before lifecycle, concurrency, subprocess, or teardown work.

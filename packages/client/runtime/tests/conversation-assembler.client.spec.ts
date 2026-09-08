@@ -1020,7 +1020,7 @@ describe('ConversationNodeAssembler', () => {
     )).toThrow(/Definition "undefined-update" returned undefined from update/)
   })
 
-  it('rejects a duplicate start before mutating the existing Context', () => {
+  it('skips a duplicate start without mutating the existing Context', () => {
     const definition: ConversationNodeDefinition<number> = {
       kind: 'single-start',
       match: event => (event.type as string) === 'command/run' ? { id: 'one', role: 'start' } : null,
@@ -1038,9 +1038,12 @@ describe('ConversationNodeAssembler', () => {
     ], false)
     assembler.flush()
 
-    expect(() => assembler.append(
+    // A torn persistence tail can emit duplicate start events; the assembler
+    // must skip them rather than crashing.
+    const publication = assembler.append(
       input(at(2, 'command/run', { commandId: 'two', name: 'x' })),
-    )).toThrow(/received more than one start Match/)
+    )
+    expect(publication).toBe('none')
     assembler.flush()
     expect([...chatSnapshot(assembler)?.nodes.values() ?? []][0]?.data).toBe(1)
   })

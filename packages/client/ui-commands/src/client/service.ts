@@ -12,6 +12,8 @@ import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the ctx.remote merge and the forwarded-event key face
 // (`commands/change` rides the allowlist) into this program.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+// Type-only: brings the `ctx.locale` merge (active locale snapshot) onto Context.
+import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { CommandResult } from '@deepseek-ai/dsh-commands/types'
 import type { ClientContext, ISessions, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
@@ -21,6 +23,7 @@ import type {
 import type { CommandContribution, CommandDecoration, CommandUiContract } from './contract.ts'
 import type { CommandDescriptor } from './directory.ts'
 import { CommandDirectory } from './directory.ts'
+import { hostCommandDescriptionZh } from './command-descriptions.ts'
 import { PopupSelectController } from './popup.ts'
 import type { TokenSegment } from './popup.ts'
 
@@ -118,7 +121,7 @@ function fuzzyCandidates(candidates: readonly InputTriggerCandidate[], rawQuery:
 
 /** Command surface: session-keyed directory + '/' source + contribution registry + per-session popups. */
 export class CommandUiRuntime extends Service implements CommandUiContract {
-  static inject = ['inputTriggers', 'sessions', 'remote', 'remote.commands']
+  static inject = ['inputTriggers', 'sessions', 'remote', 'remote.commands', 'locale']
 
   private readonly directory: CommandDirectory
   private readonly live: LiveState = { contributions: new Map(), decorations: new Map(), popups: new Map() }
@@ -244,9 +247,18 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     const list = await this.directory.ensureReady(session.sessionId, req.signal)
     const rows: InputTriggerCandidate[] = []
     const seen = new Set<string>()
+    // Host descriptions are plain English; render the zh translation when the
+    // active locale is Chinese, falling back to the English source otherwise.
+    const activeLocale = this.ctx.locale.getLocale().active
+    const translateDescription = (description: string): string =>
+      activeLocale === 'zh' ? (hostCommandDescriptionZh[description] ?? description) : description
     for (const c of list) {
       seen.add(c.name)
-      rows.push({ name: c.name, description: c.description, ...(c.input !== undefined ? { hint: c.input.hint } : {}) })
+      rows.push({
+        name: c.name,
+        description: translateDescription(c.description),
+        ...(c.input !== undefined ? { hint: c.input.hint } : {}),
+      })
     }
     for (const contribution of this.live.contributions.values()) {
       if (!contribution.available(session)) continue

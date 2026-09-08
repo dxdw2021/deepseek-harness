@@ -67,7 +67,10 @@ export class BlockAssembler {
       case 'tool-call-delta': {
         const partial = this.ensure(chunk.index, 'tool-call')
         if (partial.block) return // closed by block-end; ignore stragglers
-        partial.toolCallId = chunk.id
+        // A later delta may repeat the id; an empty-string id must not clobber
+        // a usable one or leave the block without a correlation id forever.
+        if (chunk.id) partial.toolCallId = chunk.id
+        else partial.toolCallId ??= CallId(`call-${chunk.index}`)
         if (chunk.name) partial.toolCallName = chunk.name
         partial.toolCallArguments += chunk.argumentsDelta
         return
@@ -110,7 +113,11 @@ export class BlockAssembler {
       case 'reasoning': return { type: 'reasoning', text: partial.text }
       case 'tool-call': return {
         type: 'tool-call',
-        id: partial.toolCallId ?? CallId(`call-${index}`),
+        // `||` (not `??`) also catches an explicit empty-string id: providers
+        // that emit `tool_calls[].id: ""` would otherwise leave the block with
+        // an empty correlation id, which duplicates on the wire and corrupts
+        // every derived tool/result record.
+        id: partial.toolCallId || CallId(`call-${index}`),
         name: partial.toolCallName ?? '',
         arguments: partial.toolCallArguments,
       }
@@ -132,7 +139,16 @@ export class BlockAssembler {
    *   its accumulated deltas (an unknown block type never closed by `block-end` throws).
    */
   blocks(): ContentBlock[] {
-    const blocks = this.order.map(index => this.assemble(this.mustGet(index), index))
+    const blocks = this.order.map((index) => {
+      const block = this.assemble(this.mustGet(index), index)
+      // An authoritative `block-end` payload may still carry an empty tool-call
+      // id; normalize it to the generated fallback so no path can publish an
+      // uncorrelatable tool call into the session log or a provider request.
+      if (block.type === 'tool-call' && (block.id === undefined || block.id === '')) {
+        return { ...block, id: CallId(`call-${index}`) }
+      }
+      return block
+    })
     return this.finish.kind === 'max-tokens'
       ? blocks.filter(block => block.type !== 'tool-call')
       : blocks

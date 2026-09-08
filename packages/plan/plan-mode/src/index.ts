@@ -355,6 +355,11 @@ export class PlanModeController extends Service {
           // never called. An abort (turn cancel, provider teardown) keeps its
           // own message — there is no user to wait for.
           if (cause instanceof UserQuestionError && cause.code === 'ASK_CANCELLED') {
+            // Inject a user-visible notice so the dismissal is not silent.
+            agent.inject(createUserMessage({
+              content: [{ type: 'text', text: 'Plan review dismissed — staying in plan mode.' }],
+              source: { kind: 'plugin', plugin: 'plan-mode', form: 'notice', summary: 'Plan review dismissed' },
+            }))
             throw new Error('The user dismissed the plan review to speak instead; '
               + 'stay in plan mode, stop here, and wait for their message.')
           }

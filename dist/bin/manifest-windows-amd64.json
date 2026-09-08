@@ -1,0 +1,12 @@
+{
+  "version": "0.1.0-rc.5",
+  "platform": "windows",
+  "arch": "amd64",
+  "timestamp": "2026-08-19T20:21:35.359Z",
+  "files": [
+    "dsh-windows-amd64.exe",
+    "dsh-windows-amd64.bat",
+    "dsh-windows-amd64.zip"
+  ],
+  "checksums": {}
+}
