@@ -18,6 +18,7 @@ import { useStore } from './lib/store'
  */
 export function App() {
   const sessions = useStore(s => s.sessions)
+  const pinnedSessionIds = useStore(s => s.pinnedSessionIds)
   const activeSessionId = useStore(s => s.activeSessionId)
   const runningSessions = useStore(s => s.runningSessions)
   const messages = useStore(s => s.messages)
@@ -36,6 +37,10 @@ export function App() {
   const openCommandPalette = useStore(s => s.openCommandPalette)
   const openSettings = useStore(s => s.openSettings)
   const openSidePanel = useStore(s => s.openSidePanel)
+  const togglePin = useStore(s => s.togglePin)
+  const archiveSession = useStore(s => s.archiveSession)
+  const deleteSession = useStore(s => s.deleteSession)
+  const renameSession = useStore(s => s.renameSession)
   const [newPickerOpen, setNewPickerOpen] = useState(false)
 
   const activeSession = sessions.find(s => s.id === activeSessionId)
@@ -55,6 +60,23 @@ export function App() {
 
   useEffect(() => {
     void init()
+    // Restore a deep link like `#session=<id>` (copied via the sidebar menu).
+    // init() loads sessions asynchronously, so poll briefly until the target
+    // session appears in the list before selecting it.
+    const hash = globalThis.location?.hash ?? ''
+    const m = /#session=([^/]+)$/.exec(hash)
+    if (m) {
+      const target = decodeURIComponent(m[1])
+      let tries = 0
+      const timer = setInterval(() => {
+        tries += 1
+        const found = useStore.getState().sessions.some(s => s.id === target)
+        if (found || tries > 30) {
+          clearInterval(timer)
+          if (found) void useStore.getState().selectSession(target)
+        }
+      }, 200)
+    }
   }, [init])
 
   return (
@@ -74,11 +96,16 @@ export function App() {
         <Sidebar
           collapsed={sidebarCollapsed}
           sessions={sessions}
+          pinnedSessionIds={pinnedSessionIds}
           activeId={activeSessionId}
           runningSessions={runningSessions}
           onSelect={id => void selectSession(id)}
           onNew={() => setNewPickerOpen(true)}
           onNewInProject={cwd => void newSession(cwd)}
+          onTogglePin={id => togglePin(id)}
+          onArchive={id => void archiveSession(id)}
+          onDelete={id => deleteSession(id)}
+          onRename={(id, title) => void renameSession(id, title)}
           onOpenSettings={() => openSettings(true)}
           onOpenPanel={k => openSidePanel(k)}
         />

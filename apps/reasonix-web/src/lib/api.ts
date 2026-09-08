@@ -105,13 +105,24 @@ function loadHiddenSessions(): Set<string> {
   }
 }
 const hiddenSessionIds = loadHiddenSessions();
-function hideSession(id: string): void {
+export function hideSession(id: string): void {
   hiddenSessionIds.add(id);
   try {
     globalThis.localStorage?.setItem(HIDDEN_SESSIONS_KEY, JSON.stringify([...hiddenSessionIds]));
   } catch {
     // best-effort persistence
   }
+}
+export function unhideSession(id: string): void {
+  hiddenSessionIds.delete(id);
+  try {
+    globalThis.localStorage?.setItem(HIDDEN_SESSIONS_KEY, JSON.stringify([...hiddenSessionIds]));
+  } catch {
+    // best-effort persistence
+  }
+}
+export function isSessionHidden(id: string): boolean {
+  return hiddenSessionIds.has(id);
 }
 function origin(): string {
   const loc = globalThis.location;
@@ -185,6 +196,20 @@ export class HarnessApi implements ApiClient {
     const value = await this.call<SessionListValue>("session.list", {});
 
     return { sessions: value.items.filter((row) => !hiddenSessionIds.has(row.sessionId)).map((row) => toSession(row, projectNameOf(row.cwd))) };
+  }
+
+  /** Like `listSessions` but includes hidden/archived sessions (the history panel restores from here). */
+  async listAllSessions(): Promise<ListSessionsResult> {
+    const value = await this.call<SessionListValue>("session.list", {});
+    return { sessions: value.items.map((row) => toSession(row, projectNameOf(row.cwd))) };
+  }
+
+  async renameSession(sessionId: string, title: string): Promise<void> {
+    await this.call("session.rename", { sessionId, title });
+  }
+
+  async archiveSession(sessionId: string): Promise<void> {
+    await this.call<{ archivedSessionIds: string[] }>("workspace.archiveSession", { sessionId });
   }
 
   async openSession(id: string): Promise<OpenSessionResult> {

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { createApi } from "./api";
+import { createApi, hideSession, unhideSession } from "./api";
 import type {
   ComposerMode,
   ContextUsage,
@@ -26,6 +26,8 @@ interface AppState {
 
   // data
   sessions: Session[];
+  /** Session ids pinned by the user; pinned sessions sort first within their project group. */
+  pinnedSessionIds: string[];
   activeSessionId: string | null;
   messages: Message[];
   context: ContextUsage;
@@ -59,6 +61,16 @@ interface AppState {
   init: () => Promise<void>;
   selectSession: (id: string) => Promise<void>;
   newSession: (cwd?: string) => Promise<void>;
+  /** Toggle the pin state of a session (pinned sessions sort first in their project group). */
+  togglePin: (id: string) => void;
+  /** Archive a session on the host and hide it from the sidebar immediately. */
+  archiveSession: (id: string) => Promise<void>;
+  /** Hide a session from the sidebar locally (no host write; the host has no delete RPC). */
+  deleteSession: (id: string) => void;
+  /** Restore a hidden/archived session back into the sidebar. */
+  restoreSession: (id: string) => Promise<void>;
+  /** Rename a session on the host and refresh the local list. */
+  renameSession: (id: string, title: string) => Promise<void>;
   /** Open the host native folder picker for choosing a project directory; null when cancelled. */
   pickDirectory: () => Promise<string | null>;
   submitPrompt: (text: string, attachments?: PromptAttachment[]) => Promise<boolean>;
@@ -221,6 +233,26 @@ function saveActiveSessionId(id: string): void {
   }
 }
 
+// User-pinned sessions persist locally; the host exposes no pin RPC, so pin
+// state lives in the browser and simply sorts first within a project group.
+const PINS_KEY = "reasonix:pinned-sessions";
+function loadPinnedSessionIds(): string[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(PINS_KEY);
+    const arr: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function savePinnedSessionIds(ids: string[]): void {
+  try {
+    globalThis.localStorage?.setItem(PINS_KEY, JSON.stringify(ids));
+  } catch {
+    // best-effort persistence
+  }
+}
+
 export const useStore = create<AppState>((set, get) => ({
   // Default to the live harness backend (http://127.0.0.1:7890 via the vite
   // /api proxy). The backend default model is configured in ~/.dsh/settings.yaml
@@ -230,6 +262,7 @@ export const useStore = create<AppState>((set, get) => ({
   connected: true,
 
   sessions: [],
+  pinnedSessionIds: loadPinnedSessionIds(),
   activeSessionId: null,
   messages: [],
   runningSessions: {},
@@ -283,9 +316,10 @@ export const useStore = create<AppState>((set, get) => ({
     );
     const { sessions } = await apiInstance.listSessions();
     set({ sessions });
-    // Restore the last-active session across reloads so the conversation and
-    // its model selection are available immediately after a refresh.
-    const savedId = loadActiveSessionId();
+    // A share-link deep link (`#session=<id>`) is handled by App; skip the
+    // last-active restore so it does not race and override that selection.
+    const deepLink = /#session=([^/]+)$/.exec(globalThis.location?.hash ?? '');
+    const savedId = deepLink ? null : loadActiveSessionId();
     const target = savedId && sessions.some((s) => s.id === savedId) ? savedId : null;
     if (target) {
       void get().selectSession(target);
@@ -332,6 +366,68 @@ export const useStore = create<AppState>((set, get) => ({
       sessions: [res.session, ...s.sessions.filter((x) => x.id !== res.session.id)],
     }));
     void get().loadModels();
+  },
+
+  togglePin: (id) => {
+    const pins = get().pinnedSessionIds;
+    const next = pins.includes(id) ? pins.filter((x) => x !== id) : [...pins, id];
+    savePinnedSessionIds(next);
+    set({ pinnedSessionIds: next });
+  },
+
+  archiveSession: async (id) => {
+    if (!apiInstance) return;
+    try {
+      await apiInstance.archiveSession(id);
+    } catch {
+      // host archive failure still hides locally; the list stays clean
+    }
+    hideSession(id);
+    const nextPins = get().pinnedSessionIds.filter((x) => x !== id);
+    savePinnedSessionIds(nextPins);
+    set((s) => ({
+      sessions: s.sessions.filter((x) => x.id !== id),
+      pinnedSessionIds: nextPins,
+      ...(s.activeSessionId === id ? { activeSessionId: null } : {}),
+    }));
+  },
+
+  restoreSession: async (id) => {
+    if (!apiInstance) return;
+    unhideSession(id);
+    try {
+      const { sessions } = await apiInstance.listSessions();
+      set({ sessions });
+    } catch {
+      // refresh failure: keep the current list; the session reappears next reload
+    }
+    void get().loadHistory();
+  },
+
+  deleteSession: (id) => {
+    hideSession(id);
+    const nextPins = get().pinnedSessionIds.filter((x) => x !== id);
+    savePinnedSessionIds(nextPins);
+    set((s) => ({
+      sessions: s.sessions.filter((x) => x.id !== id),
+      pinnedSessionIds: nextPins,
+      ...(s.activeSessionId === id ? { activeSessionId: null } : {}),
+    }));
+  },
+
+  renameSession: async (id, title) => {
+    if (!apiInstance) return;
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    try {
+      await apiInstance.renameSession(id, trimmed);
+    } catch {
+      // host rename rejected (e.g. empty/duplicate title) — keep the old title
+      return;
+    }
+    set((s) => ({
+      sessions: s.sessions.map((x) => (x.id === id ? { ...x, title: trimmed } : x)),
+    }));
   },
 
   pickDirectory: async () => {
@@ -467,7 +563,8 @@ export const useStore = create<AppState>((set, get) => ({
   loadHistory: async () => {
     if (!apiInstance) return;
     try {
-      const all = await apiInstance.listSessions();
+      // Include hidden/archived sessions so the history panel can restore them.
+      const all = await apiInstance.listAllSessions();
       set({ historyAll: all.sessions });
     } catch {
       // keep previous list; panel shows an empty-state note

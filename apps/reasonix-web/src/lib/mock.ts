@@ -26,7 +26,7 @@ import type {
 
 const NOW = Date.now();
 
-const DEMO_SESSIONS: Session[] = [
+let DEMO_SESSIONS: Session[] = [
   { id: "s1", title: "清理临时构建产物（syso 与 desktop.exe）", projectName: "deepseek-harness", updatedAt: NOW - 1000 * 60 * 4 },
   { id: "s2", title: "修复 auth.go 的登录竞态", projectName: "deepseek-harness", updatedAt: NOW - 1000 * 60 * 42 },
   { id: "s3", title: "重构支付模块", projectName: "deepseek-harness", updatedAt: NOW - 1000 * 60 * 60 * 3 },
@@ -139,6 +139,10 @@ export class MockApi implements ApiClient {
     return Promise.resolve({ sessions: DEMO_SESSIONS });
   }
 
+  listAllSessions(): Promise<ListSessionsResult> {
+    return Promise.resolve({ sessions: DEMO_SESSIONS });
+  }
+
   openSession(): Promise<OpenSessionResult> {
     return Promise.resolve({
       session: DEMO_SESSIONS[0],
@@ -164,6 +168,15 @@ export class MockApi implements ApiClient {
       metrics: { cacheHitPct: 0, cost: 0, runTimeMs: 0, requestCount: 0, totalTokens: 0, turns: 0 },
       tokenUsage: JSON.parse(JSON.stringify(DEMO_TOKEN_USAGE)),
     });
+  }
+
+  renameSession(sessionId: string, title: string): Promise<void> {
+    DEMO_SESSIONS = DEMO_SESSIONS.map((s) => (s.id === sessionId ? { ...s, title } : s));
+    return Promise.resolve();
+  }
+
+  archiveSession(_sessionId: string): Promise<void> {
+    return Promise.resolve();
   }
 
   submit(_sessionId: string, text: string): Promise<PromptResult> {

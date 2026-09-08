@@ -272,9 +272,15 @@ export interface SessionSearchItem {
 
 export interface ApiClient {
   listSessions(): Promise<ListSessionsResult>
+  /** Like `listSessions` but includes hidden/archived sessions (history panel restore). */
+  listAllSessions(): Promise<ListSessionsResult>
   openSession(id: string): Promise<OpenSessionResult>
   /** Create a session; `cwd` starts it in a specific project directory. */
   newSession(cwd?: string): Promise<OpenSessionResult>
+  /** Rename a session on the host (durable title projection). */
+  renameSession(sessionId: string, title: string): Promise<void>
+  /** Archive a session on the host (registry-global archive set). */
+  archiveSession(sessionId: string): Promise<void>
   submit(
     sessionId: string,
     text: string,

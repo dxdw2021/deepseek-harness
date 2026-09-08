@@ -1,18 +1,40 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Plus, Brain, Puzzle, Settings, Clock, FolderOpen, ChevronRight, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Archive,
+  Brain,
+  ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
+  Clock,
+  Copy,
+  Link2,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  PinOff,
+  Plus,
+  Puzzle,
+  Settings,
+  Trash2,
+} from 'lucide-react'
 import type { Session } from '../types'
 
 interface Props {
   collapsed: boolean
   sessions: Session[]
+  pinnedSessionIds: string[]
   activeId: string | null
   runningSessions: Record<string, boolean>
   onSelect: (id: string) => void
   onNew: () => void
-  /** Start a new session in a specific project directory (cwd). */
   onNewInProject: (cwd: string, projectName: string) => void
+  onTogglePin: (id: string) => void
+  onArchive: (id: string) => void
+  /** Hide a session locally without a host write (the host has no delete RPC). */
+  onDelete: (id: string) => void
+  onRename: (id: string, title: string) => void
   onOpenSettings: () => void
-  onOpenPanel: (kind: 'history' | 'memory' | 'mcp-skills') => void
+  onOpenPanel: (k: 'history' | 'memory' | 'mcp-skills') => void
 }
 
 interface SessionGroup {
@@ -44,8 +66,8 @@ function timeAgo(ts: number): string {
   return `${d} 天前`
 }
 
-/** Bucket sessions by project, most recent project first, newest session first within each group. */
-function groupSessions(sessions: Session[]): SessionGroup[] {
+/** Bucket sessions by project; pinned sessions sort first within each group, then by recency. */
+function groupSessions(sessions: Session[], pinned: ReadonlySet<string>): SessionGroup[] {
   const byProject = new Map<string, Session[]>()
   for (const s of sessions) {
     const key = s.projectName || '未分组'
@@ -55,7 +77,12 @@ function groupSessions(sessions: Session[]): SessionGroup[] {
   }
   return [...byProject.entries()]
     .map(([name, items]) => {
-      const sorted = [...items].sort((a, b) => b.updatedAt - a.updatedAt)
+      const sorted = [...items].sort((a, b) => {
+        const pa = pinned.has(a.id) ? 1 : 0
+        const pb = pinned.has(b.id) ? 1 : 0
+        if (pa !== pb) return pb - pa
+        return b.updatedAt - a.updatedAt
+      })
       return {
         name,
         items: sorted,
@@ -65,21 +92,55 @@ function groupSessions(sessions: Session[]): SessionGroup[] {
     .sort((a, b) => (b.items[0]?.updatedAt ?? 0) - (a.items[0]?.updatedAt ?? 0))
 }
 
+/** Copy a string to the clipboard; failures are silent (no user-visible error). */
+async function copyText(text: string): Promise<void> {
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    // clipboard unavailable (permissions/HTTP) — the menu stays usable
+  }
+}
+
+/** Deep-link to a session: the app restores `#session=<id>` on load. */
+function shareUrl(id: string): string {
+  const loc = globalThis.location
+  const base = loc && loc.origin && loc.origin !== 'null' ? loc.origin : 'http://127.0.0.1:7890'
+  return `${base}/#session=${id}`
+}
+
+/** One open session action menu: fixed-position floating panel with groups. */
+interface MenuState {
+  id: string
+  x: number
+  y: number
+}
+
 export function Sidebar({
   collapsed,
   sessions,
+  pinnedSessionIds,
   activeId,
   runningSessions,
   onSelect,
   onNew,
   onNewInProject,
+  onTogglePin,
+  onArchive,
+  onDelete,
+  onRename,
   onOpenSettings,
   onOpenPanel,
 }: Props) {
-  const groups = useMemo(() => groupSessions(sessions), [sessions])
+  const pinnedSet = useMemo(() => new Set(pinnedSessionIds), [pinnedSessionIds])
+  const groups = useMemo(() => groupSessions(sessions, pinnedSet), [sessions, pinnedSet])
   // Per-project collapse state, persisted. Groups default to collapsed — the
   // previous all-expanded sidebar was unwieldy with many projects.
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>(loadCollapsed)
+  const [menu, setMenu] = useState<MenuState | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [draft, setDraft] = useState('')
+  const renameInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     try {
@@ -88,6 +149,29 @@ export function Sidebar({
       // storage unavailable or full — collapse still works for this session
     }
   }, [collapsedMap])
+
+  // Close the menu on any outside click or Escape.
+  useEffect(() => {
+    if (!menu) return
+    const close = (): void => setMenu(null)
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setMenu(null)
+    }
+    window.addEventListener('click', close)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [menu])
+
+  // Focus and select the input when a session enters rename mode.
+  useEffect(() => {
+    if (renaming) {
+      renameInput.current?.focus()
+      renameInput.current?.select()
+    }
+  }, [renaming])
 
   const isCollapsed = (name: string): boolean => collapsedMap[name] ?? true
   const allCollapsed = groups.every(g => isCollapsed(g.name))
@@ -134,6 +218,9 @@ export function Sidebar({
   }, [runningIds.join(',')])
 
   if (collapsed) return <aside className="sidebar sidebar--collapsed" />
+
+  const menuSession = menu ? sessions.find(s => s.id === menu.id) : undefined
+
   return (
     <aside className="sidebar">
       <button className="btn btn--primary sidebar__new" onClick={onNew}>
@@ -163,37 +250,74 @@ export function Sidebar({
                 aria-expanded={!groupCollapsed}
               >
                 {groupCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                <FolderOpen size={12} />
                 <span className="sidebar__group-name">{g.name}</span>
                 <span className="sidebar__group-count">{g.items.length}</span>
-                {g.cwd && (
-                  <button
-                    className="sidebar__group-new"
-                    title={`在 ${g.name} 项目新建会话`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (g.cwd) onNewInProject(g.cwd, g.name)
-                    }}
-                  >
-                    <Plus size={12} />
-                  </button>
-                )}
+                <button
+                  className="sidebar__group-new"
+                  title={`在 ${g.name} 项目新建会话`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (g.cwd) onNewInProject(g.cwd, g.name)
+                  }}
+                >
+                  <Plus size={12} />
+                </button>
               </div>
               {!groupCollapsed &&
                 g.items.map((s) => {
                   const running = !!runningSessions[s.id]
+                  const isPinned = pinnedSet.has(s.id)
+                  const isRenaming = renaming === s.id
                   return (
                     <div
                       key={s.id}
                       className={`session-item ${s.id === activeId ? 'session-item--active' : ''} ${running ? 'session-item--running' : ''}`}
                       onClick={() => handleSelect(s.id)}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        setMenu({ id: s.id, x: e.clientX, y: e.clientY })
+                      }}
                     >
                       <span className="session-item__title">
                         {running && <span className="session-item__spinner" aria-label="对话中" />}
-                        {s.title}
+                        {isPinned && <Pin size={10} className="session-item__pin" aria-label="已置顶" />}
+                        {isRenaming ? (
+                          <input
+                            ref={renameInput}
+                            className="session-item__rename"
+                            value={draft}
+                            onChange={e => setDraft(e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.stopPropagation()
+                                onRename(s.id, draft)
+                                setRenaming(null)
+                              } else if (e.key === 'Escape') {
+                                e.stopPropagation()
+                                setRenaming(null)
+                              }
+                            }}
+                            onBlur={() => setRenaming(null)}
+                          />
+                        ) : (
+                          s.title
+                        )}
                       </span>
                       <span className="session-item__meta">
                         {running ? <span className="session-item__running-tag">对话中</span> : timeAgo(s.updatedAt)}
+                        <button
+                          className="session-item__more"
+                          title="会话操作"
+                          aria-label={`操作 ${s.title}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                            setMenu({ id: s.id, x: Math.max(8, r.right - 168), y: r.bottom + 4 })
+                          }}
+                        >
+                          <MoreHorizontal size={13} />
+                        </button>
                       </span>
                     </div>
                   )
@@ -203,6 +327,82 @@ export function Sidebar({
         })}
         {groups.length === 0 && <div className="sidebar__empty">暂无会话</div>}
       </div>
+
+      {menu && menuSession && (
+        <div
+          className="session-menu"
+          style={{ left: menu.x, top: menu.y }}
+          onClick={e => e.stopPropagation()}
+          role="menu"
+        >
+          <button
+            className="session-menu__item"
+            role="menuitem"
+            onClick={() => {
+              onTogglePin(menuSession.id)
+              setMenu(null)
+            }}
+          >
+            {pinnedSet.has(menuSession.id) ? <PinOff size={14} /> : <Pin size={14} />}
+            {pinnedSet.has(menuSession.id) ? '取消置顶' : '置顶'}
+          </button>
+          <div className="session-menu__sep" />
+          <button
+            className="session-menu__item"
+            role="menuitem"
+            onClick={() => {
+              void copyText(shareUrl(menuSession.id))
+              setMenu(null)
+            }}
+          >
+            <Link2 size={14} /> 复制分享链接
+          </button>
+          <button
+            className="session-menu__item"
+            role="menuitem"
+            onClick={() => {
+              void copyText(menuSession.cwd ?? '')
+              setMenu(null)
+            }}
+          >
+            <Copy size={14} /> 复制工作目录路径
+          </button>
+          <div className="session-menu__sep" />
+          <button
+            className="session-menu__item"
+            role="menuitem"
+            onClick={() => {
+              setDraft(menuSession.title)
+              setRenaming(menuSession.id)
+              setMenu(null)
+            }}
+          >
+            <Pencil size={14} /> 重命名
+          </button>
+          <div className="session-menu__sep" />
+          <button
+            className="session-menu__item"
+            role="menuitem"
+            onClick={() => {
+              void onArchive(menuSession.id)
+              setMenu(null)
+            }}
+          >
+            <Archive size={14} /> 归档对话
+          </button>
+          <div className="session-menu__sep" />
+          <button
+            className="session-menu__item session-menu__item--danger"
+            role="menuitem"
+            onClick={() => {
+              void onDelete(menuSession.id)
+              setMenu(null)
+            }}
+          >
+            <Trash2 size={14} /> 删除
+          </button>
+        </div>
+      )}
 
       <div className="sidebar__footer">
         <button onClick={() => onOpenPanel('history')}><Clock size={16} /> 历史</button>

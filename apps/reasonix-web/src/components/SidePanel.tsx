@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { X, Clock, Brain, Puzzle, Settings, Search, Save } from 'lucide-react'
+import { X, Clock, Brain, Puzzle, Settings, Search, Save, RotateCcw } from 'lucide-react'
 import type { Session, SettingsNamespaceView, SidePanelKind, SkillEntry } from '../types'
 import { useStore } from '../lib/store'
+import { isSessionHidden } from '../lib/api'
 
 function nsValue(ns: SettingsNamespaceView | undefined, key: string): unknown {
   const v = (ns?.value ?? {}) as Record<string, unknown>
@@ -116,6 +117,7 @@ function HistoryPanel() {
   const historyAll = useStore(s => s.historyAll)
   const loadHistory = useStore(s => s.loadHistory)
   const selectSession = useStore(s => s.selectSession)
+  const restoreSession = useStore(s => s.restoreSession)
   const [q, setQ] = useState('')
 
   useEffect(() => {
@@ -147,6 +149,19 @@ function HistoryPanel() {
             <button key={s.id} className="sidepanel__row" onClick={() => void selectSession(s.id)}>
               <span className="sidepanel__row-title">{s.title}</span>
               <span className="sidepanel__row-meta">{new Date(s.updatedAt).toLocaleString()}</span>
+              {isSessionHidden(s.id) && (
+                <span
+                  className="sidepanel__row-restore"
+                  role="button"
+                  title="恢复到侧边栏"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void restoreSession(s.id)
+                  }}
+                >
+                  <RotateCcw size={12} /> 恢复
+                </span>
+              )}
             </button>
           ))}
         </div>
